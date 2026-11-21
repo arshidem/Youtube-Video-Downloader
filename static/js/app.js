@@ -213,19 +213,41 @@ async function handleParse() {
     }
 }
 
+// YouTube API Ready Queue
+let pendingPlayerVideoId = null;
+window.onYouTubeIframeAPIReady = function() {
+    if (pendingPlayerVideoId) {
+        const vid = pendingPlayerVideoId;
+        pendingPlayerVideoId = null;
+        initPlayer(vid);
+    }
+};
+
 // Initialize / Update YouTube Player
 function initPlayer(videoId) {
     const container = document.getElementById("playerContainer");
     if (!container) return;
-    container.innerHTML = `<div id="ytIframe"></div>`;
-
-    if (playerUpdateInterval) {
-        clearInterval(playerUpdateInterval);
-    }
 
     const watchLink = document.getElementById("watchOnYtLink");
     if (watchLink) {
         watchLink.href = `https://www.youtube.com/watch?v=${videoId}`;
+    }
+
+    if (typeof YT === "undefined" || !YT.Player) {
+        pendingPlayerVideoId = videoId;
+        const thumb = currentVideoData?.thumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+        container.innerHTML = `
+            <div class="relative w-full h-full bg-cover bg-center flex items-center justify-center select-none" style="background-image: url('${thumb}');">
+                <div class="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = `<div id="ytIframe"></div>`;
+
+    if (playerUpdateInterval) {
+        clearInterval(playerUpdateInterval);
     }
 
     try {
