@@ -215,18 +215,12 @@ function initPlayer(videoId) {
                     // Video playback restricted by owner in embedded iframes
                     const thumb = currentVideoData?.thumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
                     container.innerHTML = `
-                        <div class="relative w-full h-full bg-cover bg-center flex flex-col items-center justify-center p-4 text-center select-none" style="background-image: linear-gradient(rgba(10,12,18,0.75), rgba(10,12,18,0.92)), url('${thumb}');">
-                            <div class="w-10 h-10 rounded-full bg-red-500/20 border border-red-500/40 text-red-400 flex items-center justify-center mb-2 shadow-lg">
-                                <i data-lucide="shield-alert" class="w-5 h-5"></i>
-                            </div>
-                            <p class="text-xs font-bold text-white mb-1">Embedded Playback Restricted by Owner</p>
-                            <p class="text-[11px] text-gray-300 max-w-xs mb-3 leading-relaxed">
-                                The creator disabled in-page playback on external sites. 
-                                <span class="text-emerald-400 font-medium block mt-1">✓ You can still select resolution & download any middle duration clip below!</span>
-                            </p>
-                            <a href="https://www.youtube.com/watch?v=${videoId}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-semibold shadow transition transform active:scale-95">
+                        <div class="relative w-full h-full bg-cover bg-center flex flex-col items-center justify-center p-4 text-center select-none" style="background-image: linear-gradient(rgba(14,16,20,0.88), rgba(14,16,20,0.96)), url('${thumb}');">
+                            <p class="text-xs font-medium text-neutral-200 mb-1">In-page playback restricted by video owner</p>
+                            <p class="text-[11px] text-neutral-400 max-w-xs mb-3">You can still select any resolution & download any clip slice below.</p>
+                            <a href="https://www.youtube.com/watch?v=${videoId}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface-50 hover:bg-surface-100 text-neutral-300 hover:text-white rounded-md text-xs border border-border-subtle transition">
                                 <span>Check Timestamps on YouTube</span>
-                                <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+                                <i data-lucide="external-link" class="w-3 h-3"></i>
                             </a>
                         </div>
                     `;
@@ -248,16 +242,15 @@ function renderVideoStudio(data) {
     videoDesc.textContent = data.description || "No description available.";
     badgeDuration.textContent = data.duration_formatted;
     badgeChannel.textContent = data.channel;
-    statDuration.textContent = data.duration_formatted;
 
-    const maxRes = (data.resolutions && data.resolutions.length > 0) ? `${data.resolutions[0].height}p` : "Auto";
+    const maxRes = (data.resolutions && data.resolutions.length > 0) ? `${data.resolutions[0].height}p max` : "Auto";
     statMaxRes.textContent = maxRes;
 
     // Render Resolutions
     resolutionList.innerHTML = "";
     
-    // Add "Best Quality" button
-    const bestBtn = createResolutionBadge("best", "✨ Best Quality (Auto)", true);
+    // Add "Auto (Best)" button
+    const bestBtn = createResolutionBadge("best", "Auto (Best)", true);
     resolutionList.appendChild(bestBtn);
     selectedResolution = "best";
 
@@ -269,7 +262,7 @@ function renderVideoStudio(data) {
     }
 
     // Add Audio Only Badge
-    const audioBtn = createResolutionBadge("audio_only", "🎵 Audio Only (MP3)", false);
+    const audioBtn = createResolutionBadge("audio_only", "Audio (MP3)", false);
     resolutionList.appendChild(audioBtn);
 
     // Setup Timeline Controls
@@ -287,19 +280,19 @@ function renderVideoStudio(data) {
 function createResolutionBadge(value, label, isSelected) {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = `res-badge text-xs px-3.5 py-2 rounded-xl font-medium border transition ${
+    btn.className = `res-badge text-xs px-3 py-1.5 rounded-lg font-medium border transition ${
         isSelected 
-            ? "bg-red-600 text-white border-red-500 shadow-lg shadow-red-600/30 font-semibold" 
-            : "bg-dark-900 text-gray-300 border-dark-600 hover:border-dark-500 hover:bg-dark-700"
+            ? "bg-neutral-100 text-neutral-900 border-neutral-100 font-semibold" 
+            : "bg-surface-200 text-neutral-400 border-border-subtle hover:border-neutral-600 hover:text-white"
     }`;
     btn.textContent = label;
     btn.dataset.value = value;
 
     btn.addEventListener("click", () => {
         document.querySelectorAll(".res-badge").forEach((b) => {
-            b.className = "res-badge text-xs px-3.5 py-2 rounded-xl font-medium border transition bg-dark-900 text-gray-300 border-dark-600 hover:border-dark-500 hover:bg-dark-700";
+            b.className = "res-badge text-xs px-3 py-1.5 rounded-lg font-medium border transition bg-surface-200 text-neutral-400 border-border-subtle hover:border-neutral-600 hover:text-white";
         });
-        btn.className = "res-badge text-xs px-3.5 py-2 rounded-xl font-semibold border transition bg-red-600 text-white border-red-500 shadow-lg shadow-red-600/30";
+        btn.className = "res-badge text-xs px-3 py-1.5 rounded-lg font-semibold border transition bg-neutral-100 text-neutral-900 border-neutral-100";
         selectedResolution = value;
 
         // Auto select MP3 radio if audio_only is clicked
@@ -356,14 +349,14 @@ function updateTimelineView() {
     const isFull = (start === 0 && Math.abs(end - total) <= 1);
 
     if (isFull) {
-        selectedDurationDisplay.textContent = `${formatTime(diff)} (Full Video)`;
+        selectedDurationDisplay.textContent = `${formatTime(diff)} (Full)`;
         downloadBtnLabel.textContent = "Download Full Video";
     } else {
         const mins = Math.floor(diff / 60);
         const secs = Math.round(diff % 60);
         const humanReadable = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
-        selectedDurationDisplay.textContent = `${formatTime(diff)} (${humanReadable} middle slice)`;
-        downloadBtnLabel.textContent = `Download Selected Clip (${formatTime(start)} → ${formatTime(end)})`;
+        selectedDurationDisplay.textContent = `${formatTime(diff)} (${humanReadable})`;
+        downloadBtnLabel.textContent = `Download Clip (${formatTime(start)} → ${formatTime(end)})`;
     }
 }
 
@@ -615,23 +608,23 @@ async function loadDownloadsLibrary() {
         const data = await res.json();
 
         if (!data.downloads || data.downloads.length === 0) {
-            downloadsLibrary.innerHTML = `<p class="text-xs text-gray-500 py-3 text-center">No downloads in this folder yet.</p>`;
+            downloadsLibrary.innerHTML = `<p class="text-xs text-neutral-500 py-3 text-center font-mono">No files downloaded yet.</p>`;
             return;
         }
 
         downloadsLibrary.innerHTML = "";
         data.downloads.forEach((file) => {
             const item = document.createElement("div");
-            item.className = "flex items-center justify-between p-3 rounded-xl bg-dark-900 border border-dark-700 hover:border-dark-600 transition text-xs";
+            item.className = "flex items-center justify-between p-2.5 rounded-lg bg-surface-200 border border-border-subtle hover:border-neutral-700 transition text-xs";
             item.innerHTML = `
-                <div class="flex items-center gap-3 min-w-0 pr-3">
-                    <span class="px-2 py-1 rounded bg-dark-800 text-[10px] font-bold text-gray-400 border border-dark-700">${file.ext}</span>
-                    <span class="font-medium text-gray-200 truncate" title="${file.filename}">${file.filename}</span>
+                <div class="flex items-center gap-2.5 min-w-0 pr-2">
+                    <span class="px-1.5 py-0.5 rounded bg-surface-50 text-[10px] font-mono text-neutral-400 border border-border-subtle">${file.ext}</span>
+                    <span class="font-normal text-neutral-200 truncate" title="${file.filename}">${file.filename}</span>
                 </div>
                 <div class="flex items-center gap-3 flex-shrink-0">
-                    <span class="text-gray-400 font-mono text-[11px]">${file.size_str}</span>
-                    <button class="delete-file-btn text-gray-500 hover:text-red-400 p-1 transition" data-filename="${file.filename}" title="Delete file">
-                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    <span class="text-neutral-500 font-mono text-[11px]">${file.size_str}</span>
+                    <button class="delete-file-btn text-neutral-500 hover:text-red-400 p-1 transition" data-filename="${file.filename}" title="Delete file">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                     </button>
                 </div>
             `;
