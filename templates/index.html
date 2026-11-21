@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Video & Clip Downloader</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        yt: {
+                            red: '#FF0000',
+                            darkred: '#CC0000',
+                            hover: '#E60000',
+                        },
+                        dark: {
+                            900: '#0c0f17',
+                            800: '#141926',
+                            700: '#1e2436',
+                            600: '#2a334d',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="bg-dark-900 text-gray-100 min-h-screen flex flex-col font-sans antialiased selection:bg-red-500 selection:text-white">
+
+    <!-- Top Navigation Header -->
+    <header class="border-b border-dark-700 bg-dark-900/80 backdrop-blur-md sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-red-600 to-red-500 flex items-center justify-center shadow-lg shadow-red-500/30">
+                    <i data-lucide="youtube" class="w-6 h-6 text-white"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold tracking-tight bg-gradient-to-r from-white via-gray-100 to-gray-400 bg-clip-text text-transparent">
+                        YT Studio Downloader
+                    </h1>
+                    <p class="text-xs text-gray-400">Resolution Selection • Custom Duration & Timeline Trimmer</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center space-x-3">
+                <button id="openFolderBtn" class="flex items-center space-x-2 text-xs font-medium px-3 py-2 rounded-lg bg-dark-700 hover:bg-dark-600 text-gray-200 border border-dark-600 transition duration-200">
+                    <i data-lucide="folder" class="w-4 h-4 text-amber-400"></i>
+                    <span>Open Downloads Folder</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="max-w-5xl mx-auto px-4 py-8 flex-1 w-full space-y-8">
+
+        <!-- URL Input Card -->
+        <section class="bg-dark-800/80 border border-dark-700 rounded-2xl p-6 shadow-xl backdrop-blur-sm relative overflow-hidden">
+            <div class="absolute -right-20 -top-20 w-64 h-64 bg-red-600/10 rounded-full blur-3xl pointer-events-none"></div>
+            
+            <label for="videoUrl" class="block text-sm font-semibold text-gray-300 mb-2 flex items-center justify-between">
+                <span class="flex items-center gap-2">
+                    <i data-lucide="link" class="w-4 h-4 text-red-500"></i>
+                    YouTube Video URL or Shorts Link
+                </span>
+                <span class="text-xs text-gray-400 font-normal">Supports standard links, youtu.be, and shorts</span>
+            </label>
+
+            <div class="flex flex-col sm:flex-row gap-3">
+                <div class="relative flex-1">
+                    <input 
+                        type="text" 
+                        id="videoUrl" 
+                        placeholder="https://www.youtube.com/watch?v=... or https://youtu.be/..." 
+                        class="w-full bg-dark-900 border border-dark-600 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 rounded-xl px-4 py-3.5 text-sm text-gray-100 placeholder-gray-500 outline-none transition"
+                    />
+                    <button id="pasteBtn" title="Paste from clipboard" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white px-2 py-1 rounded bg-dark-700 text-xs flex items-center gap-1 transition">
+                        <i data-lucide="clipboard" class="w-3.5 h-3.5"></i>
+                        <span>Paste</span>
+                    </button>
+                </div>
+                <button 
+                    id="parseBtn" 
+                    class="bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-600 text-white font-semibold px-6 py-3.5 rounded-xl text-sm flex items-center justify-center gap-2 shadow-lg shadow-red-600/30 transition transform active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+                >
+                    <i data-lucide="search" class="w-4 h-4"></i>
+                    <span id="parseBtnText">Analyze Video</span>
+                </button>
+            </div>
+
+            <!-- Error Banner -->
+            <div id="errorMessage" class="hidden mt-4 p-4 rounded-xl bg-red-950/60 border border-red-800 text-red-300 text-sm flex items-start gap-3">
+                <i data-lucide="alert-circle" class="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5"></i>
+                <div id="errorText" class="flex-1"></div>
+            </div>
+        </section>
+
+        <!-- Loading Skeleton -->
+        <div id="loadingSkeleton" class="hidden bg-dark-800 border border-dark-700 rounded-2xl p-8 text-center space-y-4 animate-pulse">
+            <div class="w-12 h-12 mx-auto rounded-full border-4 border-red-500 border-t-transparent animate-spin"></div>
+            <p class="text-sm text-gray-400 font-medium">Extracting video streams, resolutions and audio tracks...</p>
+        </div>
+
+        <!-- Video Configuration Studio (Shown after parsing) -->
+        <div id="videoStudio" class="hidden space-y-6">
+
+            <!-- Video Info & Preview Card -->
+            <div class="bg-dark-800 border border-dark-700 rounded-2xl p-6 shadow-xl">
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                    
+                    <!-- Player Embed Container -->
+                    <div class="lg:col-span-5 space-y-3">
+                        <div class="relative w-full aspect-video rounded-xl overflow-hidden bg-black border border-dark-600 shadow-md group">
+                            <div id="playerContainer" class="w-full h-full"></div>
+                        </div>
+                        <div class="flex items-center justify-between text-xs text-gray-400 px-1">
+                            <span class="flex items-center gap-1.5">
+                                <i data-lucide="play-circle" class="w-3.5 h-3.5 text-red-400"></i>
+                                Live Player Preview
+                            </span>
+                            <div class="flex items-center gap-2">
+                                <span id="playerCurrentTimeDisplay" class="font-mono text-gray-300">00:00 / 00:00</span>
+                                <a id="watchOnYtLink" href="#" target="_blank" rel="noopener noreferrer" title="Open directly on YouTube" class="text-gray-400 hover:text-red-400 flex items-center gap-1 text-[11px] transition">
+                                    <span>YouTube</span>
+                                    <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Metadata -->
+                    <div class="lg:col-span-7 flex flex-col justify-between space-y-4">
+                        <div>
+                            <div class="flex items-center gap-2 mb-2">
+                                <span id="badgeDuration" class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-500/20 text-red-400 border border-red-500/30">
+                                    00:00
+                                </span>
+                                <span id="badgeChannel" class="px-2.5 py-0.5 rounded-full text-xs bg-dark-700 text-gray-300 border border-dark-600">
+                                    Channel
+                                </span>
+                            </div>
+                            <h2 id="videoTitle" class="text-xl font-bold text-white line-clamp-2 leading-snug">
+                                Video Title
+                            </h2>
+                            <p id="videoDesc" class="text-xs text-gray-400 mt-2 line-clamp-3 leading-relaxed">
+                                Video description preview...
+                            </p>
+                        </div>
+
+                        <!-- Quick Overview Stats -->
+                        <div class="grid grid-cols-3 gap-2 pt-3 border-t border-dark-700">
+                            <div class="bg-dark-900/60 p-2.5 rounded-xl border border-dark-700/60 text-center">
+                                <span class="text-[11px] text-gray-400 block">Total Duration</span>
+                                <span id="statDuration" class="text-sm font-semibold text-white font-mono">00:00</span>
+                            </div>
+                            <div class="bg-dark-900/60 p-2.5 rounded-xl border border-dark-700/60 text-center">
+                                <span class="text-[11px] text-gray-400 block">Max Resolution</span>
+                                <span id="statMaxRes" class="text-sm font-semibold text-emerald-400">1080p</span>
+                            </div>
+                            <div class="bg-dark-900/60 p-2.5 rounded-xl border border-dark-700/60 text-center">
+                                <span class="text-[11px] text-gray-400 block">Formats</span>
+                                <span class="text-sm font-semibold text-blue-400">MP4 / MKV / MP3</span>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Resolution & Format Selection -->
+            <div class="bg-dark-800 border border-dark-700 rounded-2xl p-6 shadow-xl space-y-5">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-base font-semibold text-white flex items-center gap-2">
+                        <i data-lucide="sliders" class="w-4 h-4 text-red-500"></i>
+                        Select Resolution & Format
+                    </h3>
+                    <span class="text-xs text-gray-400">Direct source extraction</span>
+                </div>
+
+                <!-- Resolution options -->
+                <div>
+                    <label class="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Available Video Resolutions</label>
+                    <div id="resolutionList" class="flex flex-wrap gap-2.5">
+                        <!-- Injected dynamically -->
+                    </div>
+                </div>
+
+                <!-- Format options -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Output Container</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <label class="format-radio-card cursor-pointer">
+                                <input type="radio" name="videoFormat" value="mp4" checked class="hidden peer">
+                                <div class="p-3 text-center rounded-xl bg-dark-900 border border-dark-600 peer-checked:border-red-500 peer-checked:bg-red-500/10 peer-checked:text-white text-gray-300 text-xs font-semibold transition">
+                                    MP4 (Default)
+                                </div>
+                            </label>
+                            <label class="format-radio-card cursor-pointer">
+                                <input type="radio" name="videoFormat" value="mkv" class="hidden peer">
+                                <div class="p-3 text-center rounded-xl bg-dark-900 border border-dark-600 peer-checked:border-red-500 peer-checked:bg-red-500/10 peer-checked:text-white text-gray-300 text-xs font-semibold transition">
+                                    MKV (High-Bitrate)
+                                </div>
+                            </label>
+                            <label class="format-radio-card cursor-pointer">
+                                <input type="radio" name="videoFormat" value="mp3" class="hidden peer">
+                                <div class="p-3 text-center rounded-xl bg-dark-900 border border-dark-600 peer-checked:border-red-500 peer-checked:bg-red-500/10 peer-checked:text-white text-gray-300 text-xs font-semibold transition">
+                                    MP3 (Audio Only)
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Custom File Name (Optional)</label>
+                        <input 
+                            type="text" 
+                            id="customFilename" 
+                            placeholder="Leave empty for original title" 
+                            class="w-full bg-dark-900 border border-dark-600 focus:border-red-500 focus:ring-1 focus:ring-red-500 rounded-xl px-3.5 py-2.5 text-xs text-gray-200 outline-none"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <!-- TIMELINE & DURATION SLICER (Crucial Feature) -->
+            <div class="bg-dark-800 border border-dark-700 rounded-2xl p-6 shadow-xl space-y-6 relative overflow-hidden">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-dark-700 pb-4">
+                    <div>
+                        <h3 class="text-base font-semibold text-white flex items-center gap-2">
+                            <i data-lucide="scissors" class="w-4 h-4 text-amber-400"></i>
+                            Duration & Timeline Range Selection
+                        </h3>
+                        <p class="text-xs text-gray-400 mt-0.5">Download full video or select any middle segment (e.g. 5 minutes from the middle)</p>
+                    </div>
+
+                    <!-- Selected Clip Duration Badge -->
+                    <div class="flex items-center gap-2 self-start sm:self-auto bg-dark-900 px-3.5 py-1.5 rounded-full border border-dark-600 shadow-inner">
+                        <i data-lucide="clock" class="w-4 h-4 text-red-400"></i>
+                        <span class="text-xs text-gray-300 font-medium">Selected Duration:</span>
+                        <span id="selectedDurationDisplay" class="text-xs font-bold text-amber-400 font-mono">00:00 (Full Video)</span>
+                    </div>
+                </div>
+
+                <!-- Interactive Dual Timeline Slider Track -->
+                <div class="space-y-4">
+                    <div class="relative py-4 select-none px-2">
+                        <!-- Track Background -->
+                        <div class="relative h-3 bg-dark-900 rounded-full overflow-hidden border border-dark-700">
+                            <!-- Highlighted Selected Duration Range -->
+                            <div id="sliderHighlight" class="absolute top-0 bottom-0 bg-gradient-to-r from-red-600 to-amber-500 rounded-full transition-all duration-75"></div>
+                        </div>
+
+                        <!-- Range Inputs for Dual Slider -->
+                        <input type="range" id="rangeStart" min="0" max="100" value="0" step="1" class="timeline-range-input z-20">
+                        <input type="range" id="rangeEnd" min="0" max="100" value="100" step="1" class="timeline-range-input z-20">
+                    </div>
+
+                    <div class="flex justify-between text-[11px] text-gray-400 font-mono px-2">
+                        <span id="timelineStartLabel">00:00</span>
+                        <span class="text-gray-500">Drag sliders to adjust middle cut</span>
+                        <span id="timelineEndLabel">00:00</span>
+                    </div>
+                </div>
+
+                <!-- Precise Timestamp Input Controls -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    
+                    <!-- Start Time Control -->
+                    <div class="bg-dark-900/90 border border-dark-700 rounded-xl p-4 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <label class="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                                Start Time
+                            </label>
+                            <button id="setStartFromPlayerBtn" class="text-[11px] text-emerald-400 hover:text-emerald-300 bg-emerald-950/40 hover:bg-emerald-950/80 px-2.5 py-1 rounded-lg border border-emerald-800/40 flex items-center gap-1 transition">
+                                <i data-lucide="crosshair" class="w-3 h-3"></i>
+                                <span>Grab Player Position</span>
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input 
+                                type="text" 
+                                id="startTimeInput" 
+                                value="00:00:00" 
+                                placeholder="00:00:00" 
+                                class="w-full bg-dark-800 border border-dark-600 focus:border-emerald-500 rounded-lg px-3 py-2 text-sm font-mono text-white text-center outline-none"
+                            />
+                            <button id="resetStartBtn" class="px-2.5 py-2 text-xs bg-dark-700 hover:bg-dark-600 rounded-lg text-gray-300 transition" title="Reset to start">
+                                Start
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- End Time Control -->
+                    <div class="bg-dark-900/90 border border-dark-700 rounded-xl p-4 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <label class="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-red-400"></span>
+                                End Time
+                            </label>
+                            <button id="setEndFromPlayerBtn" class="text-[11px] text-red-400 hover:text-red-300 bg-red-950/40 hover:bg-red-950/80 px-2.5 py-1 rounded-lg border border-red-800/40 flex items-center gap-1 transition">
+                                <i data-lucide="crosshair" class="w-3 h-3"></i>
+                                <span>Grab Player Position</span>
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input 
+                                type="text" 
+                                id="endTimeInput" 
+                                value="00:00:00" 
+                                placeholder="00:00:00" 
+                                class="w-full bg-dark-800 border border-dark-600 focus:border-red-500 rounded-lg px-3 py-2 text-sm font-mono text-white text-center outline-none"
+                            />
+                            <button id="resetEndBtn" class="px-2.5 py-2 text-xs bg-dark-700 hover:bg-dark-600 rounded-lg text-gray-300 transition" title="Reset to end">
+                                End
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Quick Presets -->
+                <div class="flex flex-wrap items-center gap-2 pt-2">
+                    <span class="text-xs text-gray-400 mr-1 flex items-center gap-1">
+                        <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i>
+                        Presets:
+                    </span>
+                    <button class="preset-btn text-xs px-3 py-1.5 rounded-lg bg-dark-700 hover:bg-dark-600 text-gray-200 transition" data-preset="full">
+                        Full Video
+                    </button>
+                    <button class="preset-btn text-xs px-3 py-1.5 rounded-lg bg-dark-700 hover:bg-dark-600 text-gray-200 transition" data-preset="middle-5m">
+                        Middle 5 Minutes
+                    </button>
+                    <button class="preset-btn text-xs px-3 py-1.5 rounded-lg bg-dark-700 hover:bg-dark-600 text-gray-200 transition" data-preset="first-5m">
+                        First 5 Mins
+                    </button>
+                    <button class="preset-btn text-xs px-3 py-1.5 rounded-lg bg-dark-700 hover:bg-dark-600 text-gray-200 transition" data-preset="first-1m">
+                        First 1 Min
+                    </button>
+                    <button class="preset-btn text-xs px-3 py-1.5 rounded-lg bg-dark-700 hover:bg-dark-600 text-gray-200 transition" data-preset="plus-30s">
+                        +30s to End
+                    </button>
+                    <button class="preset-btn text-xs px-3 py-1.5 rounded-lg bg-dark-700 hover:bg-dark-600 text-gray-200 transition" data-preset="minus-30s">
+                        -30s from End
+                    </button>
+                </div>
+            </div>
+
+            <!-- Download Action CTA Button -->
+            <div class="text-center pt-2">
+                <button 
+                    id="startDownloadBtn" 
+                    class="w-full sm:w-auto min-w-[280px] bg-gradient-to-r from-red-600 via-red-500 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white font-bold px-8 py-4 rounded-2xl text-base shadow-xl shadow-red-600/30 flex items-center justify-center gap-3 transition transform active:scale-95 mx-auto"
+                >
+                    <i data-lucide="download" class="w-5 h-5"></i>
+                    <span id="downloadBtnLabel">Download Video / Clip Now</span>
+                </button>
+            </div>
+
+        </div>
+
+        <!-- Real-Time Download Status Modal / Card -->
+        <div id="downloadModal" class="hidden bg-dark-800 border border-dark-700 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
+            <div class="flex items-start justify-between mb-4">
+                <div class="flex items-center gap-3">
+                    <div id="statusIconContainer" class="w-10 h-10 rounded-xl bg-red-500/20 text-red-400 flex items-center justify-center">
+                        <i data-lucide="loader" class="w-5 h-5 animate-spin"></i>
+                    </div>
+                    <div>
+                        <h4 id="taskTitleDisplay" class="text-sm font-bold text-white line-clamp-1">Downloading clip...</h4>
+                        <p id="taskStatusMsg" class="text-xs text-gray-400">Connecting to stream...</p>
+                    </div>
+                </div>
+                <span id="progressPercentBadge" class="text-sm font-mono font-bold text-red-400 bg-dark-900 px-3 py-1 rounded-lg border border-dark-700">
+                    0.0%
+                </span>
+            </div>
+
+            <!-- Animated Progress Bar -->
+            <div class="w-full bg-dark-900 h-3 rounded-full overflow-hidden border border-dark-700 mb-4">
+                <div id="progressBarFill" class="bg-gradient-to-r from-red-600 via-red-500 to-emerald-400 h-full w-0 transition-all duration-200"></div>
+            </div>
+
+            <!-- Download Metrics -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div class="bg-dark-900/80 p-2.5 rounded-xl border border-dark-700/60">
+                    <span class="text-gray-400 block text-[11px]">Speed</span>
+                    <span id="statSpeed" class="font-semibold text-white font-mono">0.0 MB/s</span>
+                </div>
+                <div class="bg-dark-900/80 p-2.5 rounded-xl border border-dark-700/60">
+                    <span class="text-gray-400 block text-[11px]">ETA</span>
+                    <span id="statEta" class="font-semibold text-white font-mono">--</span>
+                </div>
+                <div class="bg-dark-900/80 p-2.5 rounded-xl border border-dark-700/60">
+                    <span class="text-gray-400 block text-[11px]">Downloaded</span>
+                    <span id="statDownloaded" class="font-semibold text-white font-mono">0 MB</span>
+                </div>
+                <div class="bg-dark-900/80 p-2.5 rounded-xl border border-dark-700/60">
+                    <span class="text-gray-400 block text-[11px]">Resolution / Cut</span>
+                    <span id="statCutBadge" class="font-semibold text-amber-400 font-mono">1080p Clip</span>
+                </div>
+            </div>
+
+            <!-- Completed Actions -->
+            <div id="completedActions" class="hidden mt-5 pt-4 border-t border-dark-700 flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-2 text-emerald-400 text-xs font-semibold">
+                    <i data-lucide="check-circle-2" class="w-5 h-5"></i>
+                    <span>Download & Trimming Finished!</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button id="openFolderActionBtn" class="text-xs px-3 py-2 rounded-xl bg-dark-700 hover:bg-dark-600 text-gray-200 border border-dark-600 flex items-center gap-1.5 transition">
+                        <i data-lucide="folder-open" class="w-4 h-4 text-amber-400"></i>
+                        <span>Show in Folder</span>
+                    </button>
+                    <a id="browserDownloadBtn" href="#" class="text-xs font-semibold px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 shadow-lg shadow-emerald-600/30 transition">
+                        <i data-lucide="download" class="w-4 h-4"></i>
+                        <span>Save to Browser</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Downloads Library -->
+        <section class="bg-dark-800/80 border border-dark-700 rounded-2xl p-6 shadow-xl space-y-4">
+            <div class="flex items-center justify-between border-b border-dark-700 pb-3">
+                <h3 class="text-base font-semibold text-white flex items-center gap-2">
+                    <i data-lucide="history" class="w-4 h-4 text-red-500"></i>
+                    Downloaded Files
+                </h3>
+                <button id="refreshLibraryBtn" class="text-xs text-gray-400 hover:text-white flex items-center gap-1 transition">
+                    <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i>
+                    <span>Refresh</span>
+                </button>
+            </div>
+
+            <div id="downloadsLibrary" class="space-y-2">
+                <p class="text-xs text-gray-500 py-3 text-center">No downloads in this folder yet.</p>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-dark-700 py-6 text-center text-xs text-gray-500">
+        <p>YouTube Video & Duration Slicer Downloader • Powered by yt-dlp & FFmpeg</p>
+    </footer>
+
+    <!-- YouTube IFrame API -->
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <script src="/static/js/app.js"></script>
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>
