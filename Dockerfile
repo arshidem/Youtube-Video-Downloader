@@ -19,8 +19,9 @@ COPY . .
 # Ensure downloads folder exists
 RUN mkdir -p /app/downloads
 
-EXPOSE 5000
+EXPOSE 10000
 
 ENV PYTHONUNBUFFERED=1
+ENV PORT=10000
 
-CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port ${PORT:-5000}"]
+CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port ${PORT:-10000}"]
