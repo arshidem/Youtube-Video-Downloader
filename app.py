@@ -122,7 +122,12 @@ def get_base_ydl_opts() -> dict:
     opts = {
         "quiet": True,
         "no_warnings": True,
-        "js_runtimes": {"node": {}},
+        "check_formats": None,
+        "js_runtimes": {
+            "node": {},
+            "deno": {},
+            "quickjs": {},
+        },
         "remote_components": ["ejs:github"],
         "windowsfilenames": True,
         "geo_bypass": True,
@@ -411,11 +416,17 @@ def run_download_job(download_id: str, req_data: dict):
         if resolution and resolution != "best":
             try:
                 h = int(resolution)
-                opts["format"] = f"bestvideo[height<={h}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<={h}]+bestaudio/best[height<={h}]/best"
+                opts["format"] = (
+                    f"bestvideo[height<={h}][ext=mp4]+bestaudio[ext=m4a]/"
+                    f"bestvideo[height<={h}]+bestaudio/"
+                    f"bestvideo*[height<={h}]+bestaudio*/"
+                    f"best[height<={h}]/"
+                    f"bestvideo*+bestaudio/best"
+                )
             except ValueError:
-                opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best"
+                opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/bestvideo*+bestaudio/best"
         else:
-            opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best"
+            opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/bestvideo*+bestaudio/best"
         
         if fmt in ["mp4", "mkv", "webm"]:
             opts["merge_output_format"] = fmt
