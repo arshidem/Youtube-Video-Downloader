@@ -21,7 +21,6 @@ const badgeDuration = document.getElementById("badgeDuration");
 const badgeChannel = document.getElementById("badgeChannel");
 const videoTitle = document.getElementById("videoTitle");
 const videoDesc = document.getElementById("videoDesc");
-const statDuration = document.getElementById("statDuration");
 const statMaxRes = document.getElementById("statMaxRes");
 const playerCurrentTimeDisplay = document.getElementById("playerCurrentTimeDisplay");
 
@@ -55,6 +54,7 @@ const statSpeed = document.getElementById("statSpeed");
 const statEta = document.getElementById("statEta");
 const statDownloaded = document.getElementById("statDownloaded");
 const statCutBadge = document.getElementById("statCutBadge");
+const cancelDownloadBtn = document.getElementById("cancelDownloadBtn");
 const completedActions = document.getElementById("completedActions");
 const browserDownloadBtn = document.getElementById("browserDownloadBtn");
 const openFolderActionBtn = document.getElementById("openFolderActionBtn");
@@ -95,60 +95,62 @@ function parseTimeToSeconds(timeStr) {
     return parts[0] || 0;
 }
 
-// Helper: Extract YouTube ID
-function extractVideoId(url) {
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|shorts\/)([^#&?]*).*/;
-    const match = url.match(regExp);
-    return (match && match[2].length === 11) ? match[2] : null;
+// Paste Button
+if (pasteBtn && videoUrlInput) {
+    pasteBtn.addEventListener("click", async () => {
+        try {
+            const text = await navigator.clipboard.readText();
+            if (text) {
+                videoUrlInput.value = text.trim();
+                handleParse();
+            }
+        } catch (e) {
+            videoUrlInput.focus();
+        }
+    });
 }
 
-// Paste Button
-pasteBtn.addEventListener("click", async () => {
-    try {
-        const text = await navigator.clipboard.readText();
-        if (text) {
-            videoUrlInput.value = text.trim();
+if (videoUrlInput) {
+    videoUrlInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
             handleParse();
         }
-    } catch (e) {
-        videoUrlInput.focus();
-    }
-});
+    });
+    videoUrlInput.addEventListener("input", (e) => {
+        localStorage.setItem("yt_cached_url", e.target.value.trim());
+    });
+}
 
-videoUrlInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-        e.preventDefault();
-        handleParse();
-    }
-});
-
-parseBtn.addEventListener("click", handleParse);
+if (parseBtn) {
+    parseBtn.addEventListener("click", handleParse);
+}
 
 function showError(msg) {
-    errorText.textContent = msg;
-    errorMessage.classList.remove("hidden");
-    loadingSkeleton.classList.add("hidden");
+    if (errorText) errorText.textContent = msg;
+    if (errorMessage) errorMessage.classList.remove("hidden");
+    if (loadingSkeleton) loadingSkeleton.classList.add("hidden");
     if (window.lucide) lucide.createIcons();
 }
 
 function hideError() {
-    errorMessage.classList.add("hidden");
-    errorText.textContent = "";
+    if (errorMessage) errorMessage.classList.add("hidden");
+    if (errorText) errorText.textContent = "";
 }
 
 // Parse Video from URL
 async function handleParse() {
-    const url = videoUrlInput.value.trim();
+    const url = videoUrlInput ? videoUrlInput.value.trim() : "";
     if (!url) {
         showError("Please enter a YouTube video URL.");
         return;
     }
 
     hideError();
-    loadingSkeleton.classList.remove("hidden");
-    videoStudio.classList.add("hidden");
-    parseBtn.disabled = true;
-    parseBtnText.textContent = "Analyzing...";
+    if (loadingSkeleton) loadingSkeleton.classList.remove("hidden");
+    if (videoStudio) videoStudio.classList.add("hidden");
+    if (parseBtn) parseBtn.disabled = true;
+    if (parseBtnText) parseBtnText.textContent = "Analyzing...";
 
     try {
         const res = await fetch("/api/parse", {
@@ -163,19 +165,23 @@ async function handleParse() {
         }
 
         currentVideoData = data;
+        localStorage.setItem("yt_cached_video", JSON.stringify(data));
+        localStorage.setItem("yt_cached_url", url);
+
         renderVideoStudio(data);
     } catch (err) {
         showError(err.message || "An error occurred while parsing the video.");
     } finally {
-        loadingSkeleton.classList.add("hidden");
-        parseBtn.disabled = false;
-        parseBtnText.textContent = "Analyze Video";
+        if (loadingSkeleton) loadingSkeleton.classList.add("hidden");
+        if (parseBtn) parseBtn.disabled = false;
+        if (parseBtnText) parseBtnText.textContent = "Analyze";
     }
 }
 
 // Initialize / Update YouTube Player
 function initPlayer(videoId) {
     const container = document.getElementById("playerContainer");
+    if (!container) return;
     container.innerHTML = `<div id="ytIframe"></div>`;
 
     if (playerUpdateInterval) {
@@ -205,8 +211,10 @@ function initPlayer(videoId) {
                         if (ytPlayer && ytPlayer.getCurrentTime && ytPlayer.getDuration) {
                             try {
                                 const cur = ytPlayer.getCurrentTime() || 0;
-                                const dur = ytPlayer.getDuration() || currentVideoData.duration || 0;
-                                playerCurrentTimeDisplay.textContent = `${formatTime(cur)} / ${formatTime(dur)}`;
+                                const dur = ytPlayer.getDuration() || currentVideoData?.duration || 0;
+                                if (playerCurrentTimeDisplay) {
+                                    playerCurrentTimeDisplay.textContent = `${formatTime(cur)} / ${formatTime(dur)}`;
+                                }
                             } catch (e) {}
                         }
                     }, 500);
@@ -216,7 +224,7 @@ function initPlayer(videoId) {
                     const thumb = currentVideoData?.thumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
                     container.innerHTML = `
                         <div class="relative w-full h-full bg-cover bg-center flex flex-col items-center justify-center p-4 text-center select-none" style="background-image: linear-gradient(rgba(14,16,20,0.88), rgba(14,16,20,0.96)), url('${thumb}');">
-                            <p class="text-xs font-medium text-neutral-200 mb-1">In-page playback restricted by video owner</p>
+                            <p class="text-xs font-medium text-neutral-200 mb-1">In-page playback restricted by creator</p>
                             <p class="text-[11px] text-neutral-400 max-w-xs mb-3">You can still select any resolution & download any clip slice below.</p>
                             <a href="https://www.youtube.com/watch?v=${videoId}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface-50 hover:bg-surface-100 text-neutral-300 hover:text-white rounded-md text-xs border border-border-subtle transition">
                                 <span>Check Timestamps on YouTube</span>
@@ -235,35 +243,42 @@ function initPlayer(videoId) {
 
 // Render Video Information & Timeline Controls
 function renderVideoStudio(data) {
-    videoStudio.classList.remove("hidden");
+    if (!data) return;
+    if (videoStudio) videoStudio.classList.remove("hidden");
 
     // Populate metadata
-    videoTitle.textContent = data.title;
-    videoDesc.textContent = data.description || "No description available.";
-    badgeDuration.textContent = data.duration_formatted;
-    badgeChannel.textContent = data.channel;
+    if (videoTitle) videoTitle.textContent = data.title;
+    if (videoDesc) videoDesc.textContent = data.description || "No description available.";
+    if (badgeDuration) badgeDuration.textContent = data.duration_formatted;
+    if (badgeChannel) badgeChannel.textContent = data.channel;
 
     const maxRes = (data.resolutions && data.resolutions.length > 0) ? `${data.resolutions[0].height}p max` : "Auto";
-    statMaxRes.textContent = maxRes;
+    if (statMaxRes) statMaxRes.textContent = maxRes;
 
     // Render Resolutions
-    resolutionList.innerHTML = "";
-    
-    // Add "Auto (Best)" button
-    const bestBtn = createResolutionBadge("best", "Auto (Best)", true);
-    resolutionList.appendChild(bestBtn);
-    selectedResolution = "best";
+    if (resolutionList) {
+        resolutionList.innerHTML = "";
+        
+        let savedRes = localStorage.getItem("yt_selected_res") || "best";
+        selectedResolution = savedRes;
 
-    if (data.resolutions && data.resolutions.length > 0) {
-        data.resolutions.forEach((res) => {
-            const btn = createResolutionBadge(String(res.height), res.label, false);
-            resolutionList.appendChild(btn);
-        });
+        // Auto (Best) Button
+        const bestBtn = createResolutionBadge("best", "Auto (Best)", savedRes === "best");
+        resolutionList.appendChild(bestBtn);
+
+        // Individual resolutions
+        if (data.resolutions && data.resolutions.length > 0) {
+            data.resolutions.forEach((res) => {
+                const isSelected = (String(res.height) === savedRes);
+                const btn = createResolutionBadge(String(res.height), res.label, isSelected);
+                resolutionList.appendChild(btn);
+            });
+        }
+
+        // Audio Only Badge
+        const audioBtn = createResolutionBadge("audio_only", "Audio (MP3)", savedRes === "audio_only");
+        resolutionList.appendChild(audioBtn);
     }
-
-    // Add Audio Only Badge
-    const audioBtn = createResolutionBadge("audio_only", "Audio (MP3)", false);
-    resolutionList.appendChild(audioBtn);
 
     // Setup Timeline Controls
     setupTimeline(data.duration);
@@ -274,7 +289,6 @@ function renderVideoStudio(data) {
     }
 
     if (window.lucide) lucide.createIcons();
-    videoStudio.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function createResolutionBadge(value, label, isSelected) {
@@ -294,11 +308,15 @@ function createResolutionBadge(value, label, isSelected) {
         });
         btn.className = "res-badge text-xs px-3 py-1.5 rounded-lg font-semibold border transition bg-neutral-100 text-neutral-900 border-neutral-100";
         selectedResolution = value;
+        localStorage.setItem("yt_selected_res", value);
 
         // Auto select MP3 radio if audio_only is clicked
         if (value === "audio_only") {
             const mp3Radio = document.querySelector('input[name="videoFormat"][value="mp3"]');
-            if (mp3Radio) mp3Radio.checked = true;
+            if (mp3Radio) {
+                mp3Radio.checked = true;
+                localStorage.setItem("yt_selected_format", "mp3");
+            }
         }
     });
 
@@ -309,19 +327,31 @@ function createResolutionBadge(value, label, isSelected) {
 function setupTimeline(totalDuration) {
     const total = Math.max(1, Math.round(totalDuration || 0));
 
-    rangeStart.min = 0;
-    rangeStart.max = total;
-    rangeStart.value = 0;
+    if (rangeStart) {
+        rangeStart.min = 0;
+        rangeStart.max = total;
+    }
+    if (rangeEnd) {
+        rangeEnd.min = 0;
+        rangeEnd.max = total;
+    }
 
-    rangeEnd.min = 0;
-    rangeEnd.max = total;
-    rangeEnd.value = total;
+    let s = 0;
+    let e = total;
 
-    timelineStartLabel.textContent = "00:00";
-    timelineEndLabel.textContent = formatTime(total);
+    const savedS = parseFloat(localStorage.getItem("yt_range_start"));
+    const savedE = parseFloat(localStorage.getItem("yt_range_end"));
+    if (!isNaN(savedS) && savedS >= 0 && savedS <= total) s = savedS;
+    if (!isNaN(savedE) && savedE > s && savedE <= total) e = savedE;
 
-    startTimeInput.value = "00:00";
-    endTimeInput.value = formatTime(total);
+    if (rangeStart) rangeStart.value = s;
+    if (rangeEnd) rangeEnd.value = e;
+
+    if (timelineStartLabel) timelineStartLabel.textContent = "00:00";
+    if (timelineEndLabel) timelineEndLabel.textContent = formatTime(total);
+
+    if (startTimeInput) startTimeInput.value = formatTime(s);
+    if (endTimeInput) endTimeInput.value = formatTime(e);
 
     updateTimelineView();
 }
@@ -330,112 +360,132 @@ function updateTimelineView() {
     if (!currentVideoData) return;
     const total = currentVideoData.duration || 1;
 
-    let start = parseFloat(rangeStart.value) || 0;
-    let end = parseFloat(rangeEnd.value) || total;
+    let start = rangeStart ? (parseFloat(rangeStart.value) || 0) : 0;
+    let end = rangeEnd ? (parseFloat(rangeEnd.value) || total) : total;
 
     if (start > end) {
-        // Swap or prevent cross
         start = end;
-        rangeStart.value = start;
+        if (rangeStart) rangeStart.value = start;
     }
 
     const leftPercent = (start / total) * 100;
     const widthPercent = ((end - start) / total) * 100;
 
-    sliderHighlight.style.left = `${leftPercent}%`;
-    sliderHighlight.style.width = `${widthPercent}%`;
+    if (sliderHighlight) {
+        sliderHighlight.style.left = `${leftPercent}%`;
+        sliderHighlight.style.width = `${widthPercent}%`;
+    }
 
     const diff = end - start;
     const isFull = (start === 0 && Math.abs(end - total) <= 1);
 
     if (isFull) {
-        selectedDurationDisplay.textContent = `${formatTime(diff)} (Full)`;
-        downloadBtnLabel.textContent = "Download Full Video";
+        if (selectedDurationDisplay) selectedDurationDisplay.textContent = `${formatTime(diff)} (Full)`;
+        if (downloadBtnLabel) downloadBtnLabel.textContent = "Download Full Video";
     } else {
         const mins = Math.floor(diff / 60);
         const secs = Math.round(diff % 60);
         const humanReadable = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
-        selectedDurationDisplay.textContent = `${formatTime(diff)} (${humanReadable})`;
-        downloadBtnLabel.textContent = `Download Clip (${formatTime(start)} → ${formatTime(end)})`;
+        if (selectedDurationDisplay) selectedDurationDisplay.textContent = `${formatTime(diff)} (${humanReadable})`;
+        if (downloadBtnLabel) downloadBtnLabel.textContent = `Download Clip (${formatTime(start)} → ${formatTime(end)})`;
     }
+
+    localStorage.setItem("yt_range_start", start);
+    localStorage.setItem("yt_range_end", end);
 }
 
 // Slider Event Listeners
-rangeStart.addEventListener("input", () => {
-    let s = parseFloat(rangeStart.value);
-    let e = parseFloat(rangeEnd.value);
-    if (s > e) {
-        s = e;
-        rangeStart.value = s;
-    }
-    startTimeInput.value = formatTime(s);
-    updateTimelineView();
-});
+if (rangeStart) {
+    rangeStart.addEventListener("input", () => {
+        let s = parseFloat(rangeStart.value);
+        let e = rangeEnd ? parseFloat(rangeEnd.value) : s;
+        if (s > e) {
+            s = e;
+            rangeStart.value = s;
+        }
+        if (startTimeInput) startTimeInput.value = formatTime(s);
+        updateTimelineView();
+    });
+}
 
-rangeEnd.addEventListener("input", () => {
-    let s = parseFloat(rangeStart.value);
-    let e = parseFloat(rangeEnd.value);
-    if (e < s) {
-        e = s;
-        rangeEnd.value = e;
-    }
-    endTimeInput.value = formatTime(e);
-    updateTimelineView();
-});
+if (rangeEnd) {
+    rangeEnd.addEventListener("input", () => {
+        let s = rangeStart ? parseFloat(rangeStart.value) : 0;
+        let e = parseFloat(rangeEnd.value);
+        if (e < s) {
+            e = s;
+            rangeEnd.value = e;
+        }
+        if (endTimeInput) endTimeInput.value = formatTime(e);
+        updateTimelineView();
+    });
+}
 
 // Manual Text Input Event Listeners
-startTimeInput.addEventListener("change", () => {
-    if (!currentVideoData) return;
-    const total = currentVideoData.duration;
-    let sec = parseTimeToSeconds(startTimeInput.value);
-    sec = Math.max(0, Math.min(sec, total));
-    rangeStart.value = sec;
-    startTimeInput.value = formatTime(sec);
-    updateTimelineView();
-});
+if (startTimeInput) {
+    startTimeInput.addEventListener("change", () => {
+        if (!currentVideoData) return;
+        const total = currentVideoData.duration;
+        let sec = parseTimeToSeconds(startTimeInput.value);
+        sec = Math.max(0, Math.min(sec, total));
+        if (rangeStart) rangeStart.value = sec;
+        startTimeInput.value = formatTime(sec);
+        updateTimelineView();
+    });
+}
 
-endTimeInput.addEventListener("change", () => {
-    if (!currentVideoData) return;
-    const total = currentVideoData.duration;
-    let sec = parseTimeToSeconds(endTimeInput.value);
-    sec = Math.max(0, Math.min(sec, total));
-    rangeEnd.value = sec;
-    endTimeInput.value = formatTime(sec);
-    updateTimelineView();
-});
+if (endTimeInput) {
+    endTimeInput.addEventListener("change", () => {
+        if (!currentVideoData) return;
+        const total = currentVideoData.duration;
+        let sec = parseTimeToSeconds(endTimeInput.value);
+        sec = Math.max(0, Math.min(sec, total));
+        if (rangeEnd) rangeEnd.value = sec;
+        endTimeInput.value = formatTime(sec);
+        updateTimelineView();
+    });
+}
 
 // Grab Player Position Buttons
-setStartFromPlayerBtn.addEventListener("click", () => {
-    if (ytPlayer && ytPlayer.getCurrentTime) {
-        const cur = Math.floor(ytPlayer.getCurrentTime() || 0);
-        rangeStart.value = cur;
-        startTimeInput.value = formatTime(cur);
-        updateTimelineView();
-    }
-});
+if (setStartFromPlayerBtn) {
+    setStartFromPlayerBtn.addEventListener("click", () => {
+        if (ytPlayer && ytPlayer.getCurrentTime) {
+            const cur = Math.floor(ytPlayer.getCurrentTime() || 0);
+            if (rangeStart) rangeStart.value = cur;
+            if (startTimeInput) startTimeInput.value = formatTime(cur);
+            updateTimelineView();
+        }
+    });
+}
 
-setEndFromPlayerBtn.addEventListener("click", () => {
-    if (ytPlayer && ytPlayer.getCurrentTime) {
-        const cur = Math.ceil(ytPlayer.getCurrentTime() || 0);
-        rangeEnd.value = cur;
-        endTimeInput.value = formatTime(cur);
-        updateTimelineView();
-    }
-});
+if (setEndFromPlayerBtn) {
+    setEndFromPlayerBtn.addEventListener("click", () => {
+        if (ytPlayer && ytPlayer.getCurrentTime) {
+            const cur = Math.ceil(ytPlayer.getCurrentTime() || 0);
+            if (rangeEnd) rangeEnd.value = cur;
+            if (endTimeInput) endTimeInput.value = formatTime(cur);
+            updateTimelineView();
+        }
+    });
+}
 
 // Reset Buttons
-resetStartBtn.addEventListener("click", () => {
-    rangeStart.value = 0;
-    startTimeInput.value = "00:00";
-    updateTimelineView();
-});
+if (resetStartBtn) {
+    resetStartBtn.addEventListener("click", () => {
+        if (rangeStart) rangeStart.value = 0;
+        if (startTimeInput) startTimeInput.value = "00:00";
+        updateTimelineView();
+    });
+}
 
-resetEndBtn.addEventListener("click", () => {
-    if (!currentVideoData) return;
-    rangeEnd.value = currentVideoData.duration;
-    endTimeInput.value = formatTime(currentVideoData.duration);
-    updateTimelineView();
-});
+if (resetEndBtn) {
+    resetEndBtn.addEventListener("click", () => {
+        if (!currentVideoData) return;
+        if (rangeEnd) rangeEnd.value = currentVideoData.duration;
+        if (endTimeInput) endTimeInput.value = formatTime(currentVideoData.duration);
+        updateTimelineView();
+    });
+}
 
 // Quick Presets
 document.querySelectorAll(".preset-btn").forEach((btn) => {
@@ -445,97 +495,133 @@ document.querySelectorAll(".preset-btn").forEach((btn) => {
         const preset = btn.dataset.preset;
 
         if (preset === "full") {
-            rangeStart.value = 0;
-            rangeEnd.value = total;
+            if (rangeStart) rangeStart.value = 0;
+            if (rangeEnd) rangeEnd.value = total;
         } else if (preset === "middle-5m") {
-            // User requirement: "if the user want 5 min from middle that can select the timeline and download"
             const clipLength = 300; // 5 minutes
             if (total <= clipLength) {
-                rangeStart.value = 0;
-                rangeEnd.value = total;
+                if (rangeStart) rangeStart.value = 0;
+                if (rangeEnd) rangeEnd.value = total;
             } else {
                 const middle = total / 2;
-                rangeStart.value = Math.max(0, Math.round(middle - (clipLength / 2)));
-                rangeEnd.value = Math.min(total, Math.round(middle + (clipLength / 2)));
+                if (rangeStart) rangeStart.value = Math.max(0, Math.round(middle - (clipLength / 2)));
+                if (rangeEnd) rangeEnd.value = Math.min(total, Math.round(middle + (clipLength / 2)));
             }
         } else if (preset === "first-5m") {
-            rangeStart.value = 0;
-            rangeEnd.value = Math.min(total, 300);
+            if (rangeStart) rangeStart.value = 0;
+            if (rangeEnd) rangeEnd.value = Math.min(total, 300);
         } else if (preset === "first-1m") {
-            rangeStart.value = 0;
-            rangeEnd.value = Math.min(total, 60);
+            if (rangeStart) rangeStart.value = 0;
+            if (rangeEnd) rangeEnd.value = Math.min(total, 60);
         } else if (preset === "plus-30s") {
             let currentEnd = parseFloat(rangeEnd.value);
-            rangeEnd.value = Math.min(total, currentEnd + 30);
+            if (rangeEnd) rangeEnd.value = Math.min(total, currentEnd + 30);
         } else if (preset === "minus-30s") {
             let currentEnd = parseFloat(rangeEnd.value);
-            rangeEnd.value = Math.max(parseFloat(rangeStart.value) + 1, currentEnd - 30);
+            if (rangeEnd) rangeEnd.value = Math.max(parseFloat(rangeStart.value) + 1, currentEnd - 30);
         }
 
-        startTimeInput.value = formatTime(parseFloat(rangeStart.value));
-        endTimeInput.value = formatTime(parseFloat(rangeEnd.value));
+        if (startTimeInput && rangeStart) startTimeInput.value = formatTime(parseFloat(rangeStart.value));
+        if (endTimeInput && rangeEnd) endTimeInput.value = formatTime(parseFloat(rangeEnd.value));
         updateTimelineView();
 
-        // Optional seek video player to start
-        if (ytPlayer && ytPlayer.seekTo) {
+        if (ytPlayer && ytPlayer.seekTo && rangeStart) {
             ytPlayer.seekTo(parseFloat(rangeStart.value), true);
         }
     });
 });
 
-// Start Download
-startDownloadBtn.addEventListener("click", async () => {
-    if (!currentVideoData) return;
-
-    const startSec = parseFloat(rangeStart.value) || 0;
-    const endSec = parseFloat(rangeEnd.value) || currentVideoData.duration;
-    const total = currentVideoData.duration;
-
-    const isSliced = !(startSec === 0 && Math.abs(endSec - total) <= 1);
-    const selectedFormat = document.querySelector('input[name="videoFormat"]:checked')?.value || "mp4";
-    const customFilename = customFilenameInput.value.trim();
-
-    const payload = {
-        url: currentVideoData.webpage_url || videoUrlInput.value.trim(),
-        resolution: selectedResolution,
-        format: selectedFormat,
-        start_time: isSliced ? startSec : null,
-        end_time: isSliced ? endSec : null,
-        custom_filename: customFilename || null
-    };
-
-    // UI Feedback: Show Download Modal
-    downloadModal.classList.remove("hidden");
-    completedActions.classList.add("hidden");
-    progressBarFill.style.width = "0%";
-    progressPercentBadge.textContent = "0.0%";
-    taskTitleDisplay.textContent = currentVideoData.title;
-    taskStatusMsg.textContent = "Initiating download task...";
-    const resLabel = selectedResolution === "best" ? "Best Quality" : (selectedResolution === "audio_only" ? "MP3 Audio" : `${selectedResolution}p`);
-    statCutBadge.textContent = isSliced ? `${formatTime(startSec)} → ${formatTime(endSec)} (${resLabel})` : `Full Video (${resLabel})`;
-    startDownloadBtn.disabled = true;
-
-    downloadModal.scrollIntoView({ behavior: "smooth", block: "center" });
-
-    try {
-        const res = await fetch("/api/download", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        });
-
-        const data = await res.json();
-        if (!res.ok) {
-            throw new Error(data.detail || "Failed to start download.");
-        }
-
-        activeDownloadId = data.download_id;
-        startPollingProgress(activeDownloadId);
-    } catch (err) {
-        taskStatusMsg.textContent = `Error: ${err.message}`;
-        startDownloadBtn.disabled = false;
-    }
+// Format Radio and Custom Filename Listeners
+document.querySelectorAll('input[name="videoFormat"]').forEach((radio) => {
+    radio.addEventListener("change", (e) => {
+        localStorage.setItem("yt_selected_format", e.target.value);
+    });
 });
+
+if (customFilenameInput) {
+    customFilenameInput.addEventListener("input", (e) => {
+        localStorage.setItem("yt_custom_filename", e.target.value.trim());
+    });
+}
+
+// Start Download
+if (startDownloadBtn) {
+    startDownloadBtn.addEventListener("click", async () => {
+        if (!currentVideoData) return;
+
+        const startSec = rangeStart ? (parseFloat(rangeStart.value) || 0) : 0;
+        const endSec = rangeEnd ? (parseFloat(rangeEnd.value) || currentVideoData.duration) : currentVideoData.duration;
+        const total = currentVideoData.duration;
+
+        const isSliced = !(startSec === 0 && Math.abs(endSec - total) <= 1);
+        const selectedFormat = document.querySelector('input[name="videoFormat"]:checked')?.value || "mp4";
+        const customFilename = customFilenameInput ? customFilenameInput.value.trim() : null;
+
+        const payload = {
+            url: currentVideoData.webpage_url || (videoUrlInput ? videoUrlInput.value.trim() : ""),
+            resolution: selectedResolution,
+            format: selectedFormat,
+            start_time: isSliced ? startSec : null,
+            end_time: isSliced ? endSec : null,
+            custom_filename: customFilename || null
+        };
+
+        // UI Feedback: Show Download Modal
+        if (downloadModal) downloadModal.classList.remove("hidden");
+        if (completedActions) completedActions.classList.add("hidden");
+        if (progressBarFill) progressBarFill.style.width = "0%";
+        if (progressPercentBadge) progressPercentBadge.textContent = "0.0%";
+        if (taskTitleDisplay && currentVideoData) taskTitleDisplay.textContent = currentVideoData.title;
+        if (taskStatusMsg) taskStatusMsg.textContent = "Initiating download task...";
+        const resLabel = selectedResolution === "best" ? "Best Quality" : (selectedResolution === "audio_only" ? "MP3 Audio" : `${selectedResolution}p`);
+        if (statCutBadge) statCutBadge.textContent = isSliced ? `${formatTime(startSec)} → ${formatTime(endSec)} (${resLabel})` : `Full Video (${resLabel})`;
+        if (startDownloadBtn) startDownloadBtn.disabled = true;
+
+        if (downloadModal) downloadModal.scrollIntoView({ behavior: "smooth", block: "center" });
+
+        try {
+            const res = await fetch("/api/download", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.detail || "Failed to start download.");
+            }
+
+            activeDownloadId = data.download_id;
+            localStorage.setItem("yt_active_download_id", activeDownloadId);
+            startPollingProgress(activeDownloadId);
+        } catch (err) {
+            if (taskStatusMsg) taskStatusMsg.textContent = `Error: ${err.message}`;
+            if (startDownloadBtn) startDownloadBtn.disabled = false;
+        }
+    });
+}
+
+// Cancel Download
+if (cancelDownloadBtn) {
+    cancelDownloadBtn.addEventListener("click", async () => {
+        if (!activeDownloadId) return;
+        try {
+            await fetch(`/api/cancel/${activeDownloadId}`, { method: "POST" });
+        } catch (e) {}
+
+        if (pollInterval) clearInterval(pollInterval);
+        localStorage.removeItem("yt_active_download_id");
+
+        if (taskStatusMsg) taskStatusMsg.textContent = "Download cancelled.";
+        if (startDownloadBtn) startDownloadBtn.disabled = false;
+        if (progressBarFill) progressBarFill.style.width = "0%";
+        if (progressPercentBadge) progressPercentBadge.textContent = "0.0%";
+
+        setTimeout(() => {
+            if (downloadModal) downloadModal.classList.add("hidden");
+        }, 1200);
+    });
+}
 
 // Poll download progress
 function startPollingProgress(downloadId) {
@@ -548,35 +634,44 @@ function startPollingProgress(downloadId) {
 
             const task = await res.json();
             const pct = task.progress || 0;
-            progressBarFill.style.width = `${pct}%`;
-            progressPercentBadge.textContent = `${pct.toFixed(1)}%`;
+            if (progressBarFill) progressBarFill.style.width = `${pct}%`;
+            if (progressPercentBadge) progressPercentBadge.textContent = `${pct.toFixed(1)}%`;
 
-            statSpeed.textContent = task.speed_str || "Connecting...";
-            statEta.textContent = task.eta_str || "--";
-            statDownloaded.textContent = `${task.downloaded_bytes_str || "0 MB"} / ${task.total_bytes_str || "..."}`;
+            if (statSpeed) statSpeed.textContent = task.speed_str || "Connecting...";
+            if (statEta) statEta.textContent = task.eta_str || "--";
+            if (statDownloaded) statDownloaded.textContent = `${task.downloaded_bytes_str || "0 MB"} / ${task.total_bytes_str || "..."}`;
 
             if (task.status === "downloading") {
-                taskStatusMsg.textContent = "Downloading high-resolution streams...";
+                if (taskStatusMsg) taskStatusMsg.textContent = "Downloading streams...";
             } else if (task.status === "processing") {
-                taskStatusMsg.textContent = task.status_msg || "Trimming & merging streams with FFmpeg...";
+                if (taskStatusMsg) taskStatusMsg.textContent = task.status_msg || "Trimming & merging with FFmpeg...";
             } else if (task.status === "completed") {
                 clearInterval(pollInterval);
-                taskStatusMsg.textContent = "File ready!";
-                progressBarFill.style.width = "100%";
-                progressPercentBadge.textContent = "100%";
-                startDownloadBtn.disabled = false;
+                localStorage.removeItem("yt_active_download_id");
+                if (taskStatusMsg) taskStatusMsg.textContent = "Ready!";
+                if (progressBarFill) progressBarFill.style.width = "100%";
+                if (progressPercentBadge) progressPercentBadge.textContent = "100%";
+                if (startDownloadBtn) startDownloadBtn.disabled = false;
 
                 // Setup download button
-                browserDownloadBtn.href = `/api/download-file/${downloadId}`;
-                browserDownloadBtn.setAttribute("download", task.filename || "video.mp4");
-                completedActions.classList.remove("hidden");
+                if (browserDownloadBtn) {
+                    browserDownloadBtn.href = `/api/download-file/${downloadId}`;
+                    browserDownloadBtn.setAttribute("download", task.filename || "video.mp4");
+                }
+                if (completedActions) completedActions.classList.remove("hidden");
 
                 if (window.lucide) lucide.createIcons();
                 loadDownloadsLibrary();
+            } else if (task.status === "cancelled") {
+                clearInterval(pollInterval);
+                localStorage.removeItem("yt_active_download_id");
+                if (taskStatusMsg) taskStatusMsg.textContent = "Download cancelled.";
+                if (startDownloadBtn) startDownloadBtn.disabled = false;
             } else if (task.status === "error") {
                 clearInterval(pollInterval);
-                taskStatusMsg.textContent = `Failed: ${task.error_message || "Unknown error"}`;
-                startDownloadBtn.disabled = false;
+                localStorage.removeItem("yt_active_download_id");
+                if (taskStatusMsg) taskStatusMsg.textContent = `Failed: ${task.error_message || "Unknown error"}`;
+                if (startDownloadBtn) startDownloadBtn.disabled = false;
             }
         } catch (e) {
             console.error("Progress poll error", e);
@@ -585,8 +680,8 @@ function startPollingProgress(downloadId) {
 }
 
 // Open folder action button
-openFolderBtn.addEventListener("click", openDownloadsFolder);
-openFolderActionBtn.addEventListener("click", openDownloadsFolder);
+if (openFolderBtn) openFolderBtn.addEventListener("click", openDownloadsFolder);
+if (openFolderActionBtn) openFolderActionBtn.addEventListener("click", openDownloadsFolder);
 
 async function openDownloadsFolder() {
     try {
@@ -602,6 +697,7 @@ async function openDownloadsFolder() {
 
 // Load Recent Downloads Library
 async function loadDownloadsLibrary() {
+    if (!downloadsLibrary) return;
     try {
         const res = await fetch("/api/downloads");
         if (!res.ok) return;
@@ -648,7 +744,76 @@ async function loadDownloadsLibrary() {
     }
 }
 
-refreshLibraryBtn.addEventListener("click", loadDownloadsLibrary);
+if (refreshLibraryBtn) {
+    refreshLibraryBtn.addEventListener("click", loadDownloadsLibrary);
+}
 
-// Initial load
+// Restore Saved Session from localStorage (Persistent across Refresh)
+async function restoreSavedSession() {
+    const savedUrl = localStorage.getItem("yt_cached_url");
+    if (savedUrl && videoUrlInput) {
+        videoUrlInput.value = savedUrl;
+    }
+
+    const savedFormat = localStorage.getItem("yt_selected_format");
+    if (savedFormat) {
+        const radio = document.querySelector(`input[name="videoFormat"][value="${savedFormat}"]`);
+        if (radio) radio.checked = true;
+    }
+
+    const savedCustomName = localStorage.getItem("yt_custom_filename");
+    if (savedCustomName && customFilenameInput) {
+        customFilenameInput.value = savedCustomName;
+    }
+
+    const savedVideoJson = localStorage.getItem("yt_cached_video");
+    if (savedVideoJson) {
+        try {
+            const data = JSON.parse(savedVideoJson);
+            currentVideoData = data;
+            renderVideoStudio(data);
+        } catch (e) {
+            localStorage.removeItem("yt_cached_video");
+        }
+    }
+
+    // Check active download task
+    const savedDownloadId = localStorage.getItem("yt_active_download_id");
+    if (savedDownloadId) {
+        try {
+            const res = await fetch(`/api/status/${savedDownloadId}`);
+            if (res.ok) {
+                const task = await res.json();
+                if (task.status === "downloading" || task.status === "queued" || task.status === "processing") {
+                    activeDownloadId = savedDownloadId;
+                    if (downloadModal) downloadModal.classList.remove("hidden");
+                    if (taskTitleDisplay && task.title) taskTitleDisplay.textContent = task.title;
+                    if (startDownloadBtn) startDownloadBtn.disabled = true;
+                    startPollingProgress(savedDownloadId);
+                } else if (task.status === "completed") {
+                    activeDownloadId = savedDownloadId;
+                    if (downloadModal) downloadModal.classList.remove("hidden");
+                    if (taskTitleDisplay && task.title) taskTitleDisplay.textContent = task.title;
+                    if (taskStatusMsg) taskStatusMsg.textContent = "Ready!";
+                    if (progressBarFill) progressBarFill.style.width = "100%";
+                    if (progressPercentBadge) progressPercentBadge.textContent = "100%";
+                    if (browserDownloadBtn) {
+                        browserDownloadBtn.href = `/api/download-file/${savedDownloadId}`;
+                        browserDownloadBtn.setAttribute("download", task.filename || "video.mp4");
+                    }
+                    if (completedActions) completedActions.classList.remove("hidden");
+                } else {
+                    localStorage.removeItem("yt_active_download_id");
+                }
+            } else {
+                localStorage.removeItem("yt_active_download_id");
+            }
+        } catch (e) {
+            localStorage.removeItem("yt_active_download_id");
+        }
+    }
+}
+
+// Initial Run
 loadDownloadsLibrary();
+restoreSavedSession();

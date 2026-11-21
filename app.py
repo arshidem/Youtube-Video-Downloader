@@ -219,6 +219,8 @@ def run_download_job(download_id: str, req_data: dict):
     custom_name = req_data.get("custom_filename")
 
     def progress_hook(d):
+        if task.get("cancelled"):
+            raise yt_dlp.utils.DownloadCancelled("Download cancelled by user")
         status = d.get("status")
         if status == "downloading":
             downloaded = d.get("downloaded_bytes", 0)
@@ -308,6 +310,16 @@ def run_download_job(download_id: str, req_data: dict):
             task["progress"] = 100.0
             task["filename"] = f"video_{safe_download_id}.{final_ext}"
             task["filesize_str"] = "Completed"
+    except yt_dlp.utils.DownloadCancelled:
+        task["status"] = "cancelled"
+        task["status_msg"] = "Download cancelled by user"
+        task["progress"] = 0.0
+        # Clean up any partial files
+        for p in DOWNLOADS_DIR.glob(f"*{safe_download_id}*"):
+            try:
+                p.unlink(missing_ok=True)
+            except Exception:
+                pass
     except Exception as e:
         task["status"] = "error"
         task["error_message"] = str(e)
@@ -351,6 +363,16 @@ async def get_download_status(download_id: str):
     if not task:
         raise HTTPException(status_code=404, detail="Download task not found.")
     return task
+
+@app.post("/api/cancel/{download_id}")
+async def cancel_download(download_id: str):
+    task = downloads_store.get(download_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Download task not found.")
+    task["cancelled"] = True
+    task["status"] = "cancelled"
+    task["status_msg"] = "Download cancelled by user"
+    return {"success": True, "message": "Download cancelled"}
 
 @app.get("/api/download-file/{download_id}")
 async def get_download_file(download_id: str):

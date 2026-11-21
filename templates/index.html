@@ -29,7 +29,7 @@
     </script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=1.3">
 </head>
 <body class="bg-surface-300 text-neutral-200 min-h-screen flex flex-col font-sans antialiased text-sm">
 
@@ -290,9 +290,14 @@
                     <p id="taskTitleDisplay" class="font-medium text-white truncate">Downloading...</p>
                     <p id="taskStatusMsg" class="text-[11px] text-neutral-400">Initializing...</p>
                 </div>
-                <span id="progressPercentBadge" class="font-mono text-xs text-neutral-300 bg-surface-200 px-2 py-0.5 rounded border border-border-subtle">
-                    0.0%
-                </span>
+                <div class="flex items-center gap-2">
+                    <span id="progressPercentBadge" class="font-mono text-xs text-neutral-300 bg-surface-200 px-2 py-0.5 rounded border border-border-subtle">
+                        0.0%
+                    </span>
+                    <button id="cancelDownloadBtn" class="text-[11px] text-neutral-400 hover:text-red-400 px-2 py-0.5 rounded bg-surface-200 border border-border-subtle transition">
+                        Cancel
+                    </button>
+                </div>
             </div>
 
             <!-- Hairline Progress Bar -->
@@ -351,7 +356,7 @@
 
     <!-- YouTube IFrame API -->
     <script src="https://www.youtube.com/iframe_api"></script>
-    <script src="/static/js/app.js"></script>
+    <script src="/static/js/app.js?v=1.3"></script>
     <script>
         lucide.createIcons();
     </script>
