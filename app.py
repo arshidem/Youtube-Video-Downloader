@@ -120,9 +120,19 @@ def get_base_ydl_opts() -> dict:
     if proxy:
         opts["proxy"] = proxy.strip()
 
-    # Optional YouTube authentication. Prefer a local cookie export when supplied;
-    # otherwise yt-dlp can read cookies from a locally installed browser.
+    # Optional YouTube authentication. Prefer raw cookie text, local file, or browser export.
     cookie_file = os.getenv("YTDLP_COOKIES", "").strip()
+    cookie_text = os.getenv("YTDLP_COOKIES_TEXT", "").strip()
+    
+    # If raw cookie text is provided in environment variables (ideal for cloud dashboards like Render/Railway)
+    if cookie_text:
+        env_cookie_path = BASE_DIR / ".env_cookies.txt"
+        try:
+            env_cookie_path.write_text(cookie_text, encoding="utf-8")
+            cookie_file = str(env_cookie_path.resolve())
+        except Exception as e:
+            print(f"Warning saving YTDLP_COOKIES_TEXT: {e}")
+
     if not cookie_file:
         local_cookie = BASE_DIR / "cookies.txt"
         if local_cookie.is_file():

@@ -21,4 +21,6 @@ ENV/
 
 # Browser authentication cookies (never commit these)
 cookies.txt
-* youtube-cookies.txt
+*.cookies*.txt
+.*cookies*.txt
+*youtube-cookies.txt
