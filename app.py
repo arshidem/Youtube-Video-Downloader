@@ -50,6 +50,9 @@ downloads_store: Dict[str, Dict[str, Any]] = {}
 class ParseRequest(BaseModel):
     url: str
 
+class SaveCookiesRequest(BaseModel):
+    cookie_text: str
+
 class DownloadRequest(BaseModel):
     url: str
     resolution: Optional[str] = "best"
@@ -168,6 +171,35 @@ async def favicon():
 async def index(request: Request):
     return templates.TemplateResponse(request=request, name="index.html")
 
+@app.get("/api/cookies-status")
+async def get_cookies_status():
+    cookie_file = BASE_DIR / "cookies.txt"
+    has_cookies = cookie_file.exists() or bool(os.getenv("YTDLP_COOKIES")) or bool(os.getenv("YTDLP_COOKIES_TEXT"))
+    return {"has_cookies": has_cookies}
+
+@app.post("/api/save-cookies")
+async def save_cookies(req: SaveCookiesRequest):
+    text = req.cookie_text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Cookie content cannot be empty.")
+    
+    cookie_file = BASE_DIR / "cookies.txt"
+    try:
+        cookie_file.write_text(text, encoding="utf-8")
+        return {"success": True, "message": "Cookies saved successfully! YouTube authenticated."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save cookies: {str(e)}")
+
+@app.delete("/api/delete-cookies")
+async def delete_cookies():
+    cookie_file = BASE_DIR / "cookies.txt"
+    if cookie_file.exists():
+        try:
+            cookie_file.unlink()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+    return {"success": True, "message": "Saved cookies removed."}
+
 @app.post("/api/parse")
 async def parse_video(req: ParseRequest):
     url = req.url.strip()
@@ -190,14 +222,7 @@ async def parse_video(req: ParseRequest):
         if "Sign in to confirm" in error_msg or "not a bot" in error_msg.lower():
             raise HTTPException(
                 status_code=403,
-                detail=(
-                    "YouTube requires account verification for this request. "
-                    "On the computer running this app, sign in to YouTube in Chrome/Edge/Firefox, "
-                    "close the browser, then set YTDLP_COOKIES_FROM_BROWSER=chrome "
-                    "(or edge/firefox) and restart the app. Alternatively, export a Netscape "
-                    "cookies.txt file and set YTDLP_COOKIES to its full path. "
-                    "Keep cookies private and never commit the file."
-                )
+                detail="YouTube requires bot verification on this server. Click 'Fix with Cookies' or 'Cookies / Auth' in the top bar to paste your cookies.txt and unlock the server."
             )
         raise HTTPException(status_code=400, detail=f"Failed to fetch video details: {error_msg}")
 

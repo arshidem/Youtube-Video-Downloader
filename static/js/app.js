@@ -39,6 +39,17 @@ const modalVideoTitle = document.getElementById("modalVideoTitle");
 const modalVideoPlayer = document.getElementById("modalVideoPlayer");
 const modalCloseBtn = document.getElementById("modalCloseBtn");
 
+// Cookie & Verification Modal Elements
+const cookiesModalBtn = document.getElementById("cookiesModalBtn");
+const openCookiesFromErrorBtn = document.getElementById("openCookiesFromErrorBtn");
+const cookiesModal = document.getElementById("cookiesModal");
+const cookiesModalCloseBtn = document.getElementById("cookiesModalCloseBtn");
+const cookieTextInput = document.getElementById("cookieTextInput");
+const cookiesFileInput = document.getElementById("cookiesFileInput");
+const saveCookiesBtn = document.getElementById("saveCookiesBtn");
+const deleteCookiesBtn = document.getElementById("deleteCookiesBtn");
+const cookieStatusMsg = document.getElementById("cookieStatusMsg");
+
 // Resolution & Format Elements
 const resolutionList = document.getElementById("resolutionList");
 const customFilenameInput = document.getElementById("customFilename");
@@ -145,12 +156,21 @@ function showError(msg) {
     if (errorText) errorText.textContent = msg;
     if (errorMessage) errorMessage.classList.remove("hidden");
     if (loadingSkeleton) loadingSkeleton.classList.add("hidden");
+    if (openCookiesFromErrorBtn) {
+        const needsCookies = /verification|bot|cookie/i.test(msg);
+        if (needsCookies) {
+            openCookiesFromErrorBtn.classList.remove("hidden");
+        } else {
+            openCookiesFromErrorBtn.classList.add("hidden");
+        }
+    }
     if (window.lucide) lucide.createIcons();
 }
 
 function hideError() {
     if (errorMessage) errorMessage.classList.add("hidden");
     if (errorText) errorText.textContent = "";
+    if (openCookiesFromErrorBtn) openCookiesFromErrorBtn.classList.add("hidden");
 }
 
 // Parse Video from URL
@@ -832,6 +852,111 @@ if (videoModal) {
     });
 }
 
+// Cookies / YouTube Auth Modal Handlers
+function openCookiesModal() {
+    if (!cookiesModal) return;
+    cookiesModal.classList.remove("hidden");
+    if (cookieStatusMsg) cookieStatusMsg.classList.add("hidden");
+    if (window.lucide) lucide.createIcons();
+}
+
+function closeCookiesModal() {
+    if (!cookiesModal) return;
+    cookiesModal.classList.add("hidden");
+}
+
+if (cookiesModalBtn) {
+    cookiesModalBtn.addEventListener("click", openCookiesModal);
+}
+
+if (openCookiesFromErrorBtn) {
+    openCookiesFromErrorBtn.addEventListener("click", openCookiesModal);
+}
+
+if (cookiesModalCloseBtn) {
+    cookiesModalCloseBtn.addEventListener("click", closeCookiesModal);
+}
+
+if (cookiesModal) {
+    cookiesModal.addEventListener("click", (e) => {
+        if (e.target === cookiesModal) closeCookiesModal();
+    });
+}
+
+// Upload cookies file reader
+if (cookiesFileInput && cookieTextInput) {
+    cookiesFileInput.addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            cookieTextInput.value = event.target.result;
+        };
+        reader.readAsText(file);
+    });
+}
+
+// Save cookies
+if (saveCookiesBtn) {
+    saveCookiesBtn.addEventListener("click", async () => {
+        const text = cookieTextInput ? cookieTextInput.value.trim() : "";
+        if (!text) {
+            showCookieMsg("Please paste cookie data or upload a cookies.txt file.", false);
+            return;
+        }
+
+        saveCookiesBtn.disabled = true;
+        saveCookiesBtn.textContent = "Saving...";
+        try {
+            const res = await fetch("/api/save-cookies", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ cookie_text: text })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || "Failed to save cookies.");
+
+            showCookieMsg(data.message || "Cookies saved successfully!", true);
+            setTimeout(() => {
+                closeCookiesModal();
+                saveCookiesBtn.disabled = false;
+                saveCookiesBtn.textContent = "Save & Activate Cookies";
+                // If there's an error message showing or a URL entered, re-parse automatically!
+                if (videoUrlInput && videoUrlInput.value.trim()) {
+                    handleParse();
+                }
+            }, 1200);
+        } catch (err) {
+            showCookieMsg(err.message, false);
+            saveCookiesBtn.disabled = false;
+            saveCookiesBtn.textContent = "Save & Activate Cookies";
+        }
+    });
+}
+
+// Delete cookies
+if (deleteCookiesBtn) {
+    deleteCookiesBtn.addEventListener("click", async () => {
+        if (!confirm("Are you sure you want to remove saved cookies?")) return;
+        try {
+            await fetch("/api/delete-cookies", { method: "DELETE" });
+            if (cookieTextInput) cookieTextInput.value = "";
+            showCookieMsg("Cookies removed from server.", true);
+        } catch (e) {
+            showCookieMsg("Failed to delete cookies.", false);
+        }
+    });
+}
+
+function showCookieMsg(msg, isSuccess) {
+    if (!cookieStatusMsg) return;
+    cookieStatusMsg.textContent = msg;
+    cookieStatusMsg.className = `text-xs p-2.5 rounded font-mono ${
+        isSuccess ? "bg-emerald-950/50 border border-emerald-800 text-emerald-300" : "bg-red-950/50 border border-red-800 text-red-300"
+    }`;
+    cookieStatusMsg.classList.remove("hidden");
+}
+
 // Load Recent Downloads Library
 async function loadDownloadsLibrary() {
     if (!downloadsLibrary) return;
@@ -911,6 +1036,10 @@ window.addEventListener("keydown", (e) => {
     const isInputActive = (activeTag === "input" || activeTag === "textarea");
 
     if (e.key === "Escape") {
+        if (cookiesModal && !cookiesModal.classList.contains("hidden")) {
+            closeCookiesModal();
+            return;
+        }
         if (videoModal && !videoModal.classList.contains("hidden")) {
             closeVideoModal();
             return;

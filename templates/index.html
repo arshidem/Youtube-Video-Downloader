@@ -42,10 +42,16 @@
                 <span class="text-[11px] text-neutral-500 font-mono">v1.2</span>
             </div>
             
-            <button id="openFolderBtn" class="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-white px-2.5 py-1.5 rounded-md hover:bg-surface-50 border border-border-subtle transition">
-                <i data-lucide="folder" class="w-3.5 h-3.5"></i>
-                <span class="hidden sm:inline">Downloads</span>
-            </button>
+            <div class="flex items-center gap-2">
+                <button id="cookiesModalBtn" class="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-white px-2.5 py-1.5 rounded-md hover:bg-surface-50 border border-border-subtle transition" title="YouTube Authentication">
+                    <i data-lucide="key" class="w-3.5 h-3.5"></i>
+                    <span class="hidden sm:inline">Cookies</span>
+                </button>
+                <button id="openFolderBtn" class="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-white px-2.5 py-1.5 rounded-md hover:bg-surface-50 border border-border-subtle transition">
+                    <i data-lucide="folder" class="w-3.5 h-3.5"></i>
+                    <span class="hidden sm:inline">Downloads</span>
+                </button>
+            </div>
         </div>
     </header>
 
@@ -75,9 +81,15 @@
             </div>
 
             <!-- Error Banner -->
-            <div id="errorMessage" class="hidden mt-3 p-3 rounded-lg bg-red-950/40 border border-red-900/60 text-red-300 text-xs flex items-center gap-2">
-                <i data-lucide="alert-circle" class="w-4 h-4 text-red-400 flex-shrink-0"></i>
-                <span id="errorText" class="flex-1"></span>
+            <div id="errorMessage" class="hidden mt-3 p-3 rounded-lg bg-red-950/40 border border-red-900/60 text-red-300 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                <div class="flex items-center gap-2 flex-1 min-w-0">
+                    <i data-lucide="alert-circle" class="w-4 h-4 text-red-400 flex-shrink-0"></i>
+                    <span id="errorText" class="flex-1 break-words"></span>
+                </div>
+                <button id="openCookiesFromErrorBtn" class="hidden px-2.5 py-1 bg-red-900/60 hover:bg-red-800 text-red-200 rounded text-xs font-medium border border-red-700 transition flex items-center gap-1.5 flex-shrink-0">
+                    <i data-lucide="key" class="w-3 h-3"></i>
+                    <span>Fix with Cookies</span>
+                </button>
             </div>
         </section>
 
@@ -432,9 +444,64 @@
         </div>
     </div>
 
+    <!-- Cookies / YouTube Auth Modal -->
+    <div id="cookiesModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+        <div class="bg-surface-100 border border-border-subtle rounded-xl max-w-lg w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="shield-check" class="w-4 h-4 text-neutral-300"></i>
+                    <span class="text-xs font-medium text-white">YouTube Cookies / Verification</span>
+                </div>
+                <button id="cookiesModalCloseBtn" class="text-neutral-400 hover:text-white p-1 rounded-md hover:bg-surface-50 transition" title="Close">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <div class="p-4 space-y-3.5 text-xs">
+                <p class="text-neutral-300 leading-relaxed text-[11px]">
+                    Public cloud servers (AWS, Render, Railway, DigitalOcean) are challenged by YouTube with <em>"Sign in to confirm you're not a bot"</em>. Providing your YouTube session cookies unlocks full 4K downloads without verification blocks.
+                </p>
+
+                <div class="bg-surface-200 border border-border-subtle rounded-lg p-3 space-y-1.5 text-[11px] text-neutral-400 font-mono">
+                    <div class="text-neutral-300 font-semibold mb-1">Quick 30-Second Guide:</div>
+                    <div>1. Install Chrome/Firefox extension: <strong>"Get cookies.txt LOCALLY"</strong></div>
+                    <div>2. Open <strong>youtube.com</strong> while signed in, click extension, click <strong>Export</strong></div>
+                    <div>3. Upload or paste the text below and click <strong>Save Cookies</strong></div>
+                </div>
+
+                <div class="space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <label class="text-[11px] font-medium text-neutral-300">Cookie Data (Netscape format)</label>
+                        <label class="text-[11px] text-neutral-400 hover:text-white cursor-pointer underline flex items-center gap-1">
+                            <i data-lucide="upload" class="w-3 h-3"></i>
+                            <span>Upload cookies.txt file</span>
+                            <input type="file" id="cookiesFileInput" accept=".txt" class="hidden">
+                        </label>
+                    </div>
+                    <textarea 
+                        id="cookieTextInput" 
+                        rows="6" 
+                        placeholder="# Netscape HTTP Cookie File&#10;.youtube.com  TRUE  /  TRUE  ...  SAPISID  ...&#10;Paste contents of cookies.txt here..." 
+                        class="w-full bg-surface-200 border border-border-subtle focus:border-neutral-500 rounded-lg p-2.5 text-[11px] font-mono text-neutral-200 outline-none resize-none"
+                    ></textarea>
+                </div>
+
+                <div id="cookieStatusMsg" class="hidden text-xs p-2 rounded"></div>
+
+                <div class="flex items-center justify-between pt-1">
+                    <button id="deleteCookiesBtn" class="text-[11px] text-neutral-500 hover:text-red-400 transition">
+                        Remove Saved Cookies
+                    </button>
+                    <button id="saveCookiesBtn" class="bg-neutral-100 hover:bg-white text-neutral-900 font-medium px-4 py-2 rounded-lg text-xs transition">
+                        Save & Activate Cookies
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- YouTube IFrame API -->
     <script src="https://www.youtube.com/iframe_api"></script>
-    <script src="/static/js/app.js?v=1.4"></script>
+    <script src="/static/js/app.js?v=1.5"></script>
     <script>
         lucide.createIcons();
     </script>
