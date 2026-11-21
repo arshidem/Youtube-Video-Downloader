@@ -225,6 +225,9 @@ async def parse_video(req: ParseRequest):
 
     opts = get_base_ydl_opts()
     opts["extract_flat"] = False
+    opts["format"] = None
+    opts["check_formats"] = None
+    opts["ignore_no_formats_error"] = True
 
     try:
         def fetch_info():
