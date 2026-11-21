@@ -24,6 +24,21 @@ const videoDesc = document.getElementById("videoDesc");
 const statMaxRes = document.getElementById("statMaxRes");
 const playerCurrentTimeDisplay = document.getElementById("playerCurrentTimeDisplay");
 
+// Chapters & Subtitles & Advanced Options
+const chaptersContainer = document.getElementById("chaptersContainer");
+const chaptersList = document.getElementById("chaptersList");
+const chaptersCountBadge = document.getElementById("chaptersCountBadge");
+const losslessCutCheckbox = document.getElementById("losslessCutCheckbox");
+const audioFadeCheckbox = document.getElementById("audioFadeCheckbox");
+const subtitleSelect = document.getElementById("subtitleSelect");
+const embedSubCheckbox = document.getElementById("embedSubCheckbox");
+
+// In-App Video Player Modal Elements
+const videoModal = document.getElementById("videoModal");
+const modalVideoTitle = document.getElementById("modalVideoTitle");
+const modalVideoPlayer = document.getElementById("modalVideoPlayer");
+const modalCloseBtn = document.getElementById("modalCloseBtn");
+
 // Resolution & Format Elements
 const resolutionList = document.getElementById("resolutionList");
 const customFilenameInput = document.getElementById("customFilename");
@@ -282,6 +297,55 @@ function renderVideoStudio(data) {
 
     // Setup Timeline Controls
     setupTimeline(data.duration);
+
+    // Render Chapters if available
+    if (data.chapters && data.chapters.length > 0) {
+        if (chaptersContainer) chaptersContainer.classList.remove("hidden");
+        if (chaptersCountBadge) chaptersCountBadge.textContent = data.chapters.length;
+        if (chaptersList) {
+            chaptersList.innerHTML = "";
+            data.chapters.forEach((ch) => {
+                const chBtn = document.createElement("button");
+                chBtn.type = "button";
+                chBtn.className = "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-surface-200 hover:bg-surface-50 text-neutral-300 hover:text-white border border-border-subtle transition text-xs text-left group";
+                chBtn.innerHTML = `
+                    <span class="font-mono text-neutral-500 group-hover:text-neutral-300 text-[10px]">${ch.start_formatted}</span>
+                    <span class="truncate max-w-[180px]">${ch.title}</span>
+                `;
+                chBtn.title = `${ch.title} (${ch.start_formatted} → ${ch.end_formatted})`;
+                chBtn.addEventListener("click", () => {
+                    const s = Math.round(ch.start_time);
+                    const e = Math.min(Math.round(ch.end_time), Math.round(data.duration));
+                    if (rangeStart) rangeStart.value = s;
+                    if (rangeEnd) rangeEnd.value = e;
+                    if (startTimeInput) startTimeInput.value = formatTime(s);
+                    if (endTimeInput) endTimeInput.value = formatTime(e);
+                    updateTimelineView();
+                    if (ytPlayer && ytPlayer.seekTo) {
+                        ytPlayer.seekTo(s, true);
+                    }
+                });
+                chaptersList.appendChild(chBtn);
+            });
+        }
+    } else {
+        if (chaptersContainer) chaptersContainer.classList.add("hidden");
+    }
+
+    // Populate Subtitles
+    if (subtitleSelect) {
+        subtitleSelect.innerHTML = `<option value="">None</option>`;
+        if (data.subtitles && data.subtitles.length > 0) {
+            data.subtitles.forEach((sub) => {
+                const opt = document.createElement("option");
+                opt.value = sub.code;
+                opt.textContent = sub.label;
+                subtitleSelect.appendChild(opt);
+            });
+            const savedSub = localStorage.getItem("yt_selected_subtitle");
+            if (savedSub) subtitleSelect.value = savedSub;
+        }
+    }
 
     // Embed player
     if (data.id) {
@@ -544,6 +608,28 @@ if (customFilenameInput) {
     });
 }
 
+// Option Checkbox Listeners
+if (losslessCutCheckbox) {
+    losslessCutCheckbox.addEventListener("change", (e) => {
+        localStorage.setItem("yt_lossless_cut", e.target.checked);
+    });
+}
+if (audioFadeCheckbox) {
+    audioFadeCheckbox.addEventListener("change", (e) => {
+        localStorage.setItem("yt_audio_fade", e.target.checked);
+    });
+}
+if (subtitleSelect) {
+    subtitleSelect.addEventListener("change", (e) => {
+        localStorage.setItem("yt_selected_subtitle", e.target.value);
+    });
+}
+if (embedSubCheckbox) {
+    embedSubCheckbox.addEventListener("change", (e) => {
+        localStorage.setItem("yt_embed_sub", e.target.checked);
+    });
+}
+
 // Start Download
 if (startDownloadBtn) {
     startDownloadBtn.addEventListener("click", async () => {
@@ -556,6 +642,10 @@ if (startDownloadBtn) {
         const isSliced = !(startSec === 0 && Math.abs(endSec - total) <= 1);
         const selectedFormat = document.querySelector('input[name="videoFormat"]:checked')?.value || "mp4";
         const customFilename = customFilenameInput ? customFilenameInput.value.trim() : null;
+        const lossless = losslessCutCheckbox ? losslessCutCheckbox.checked : false;
+        const audioFade = audioFadeCheckbox ? audioFadeCheckbox.checked : false;
+        const subtitleLang = subtitleSelect ? subtitleSelect.value : null;
+        const embedSub = embedSubCheckbox ? embedSubCheckbox.checked : false;
 
         const payload = {
             url: currentVideoData.webpage_url || (videoUrlInput ? videoUrlInput.value.trim() : ""),
@@ -563,7 +653,11 @@ if (startDownloadBtn) {
             format: selectedFormat,
             start_time: isSliced ? startSec : null,
             end_time: isSliced ? endSec : null,
-            custom_filename: customFilename || null
+            custom_filename: customFilename || null,
+            lossless: lossless,
+            audio_fade: audioFade,
+            subtitle_lang: subtitleLang || null,
+            embed_sub: embedSub
         };
 
         // UI Feedback: Show Download Modal
@@ -695,6 +789,36 @@ async function openDownloadsFolder() {
     }
 }
 
+// Video Player Modal
+function openVideoModal(filename) {
+    if (!videoModal || !modalVideoPlayer) return;
+    if (modalVideoTitle) modalVideoTitle.textContent = filename;
+    modalVideoPlayer.src = `/api/stream/${encodeURIComponent(filename)}`;
+    videoModal.classList.remove("hidden");
+    modalVideoPlayer.play().catch(() => {});
+    if (window.lucide) lucide.createIcons();
+}
+
+function closeVideoModal() {
+    if (!videoModal || !modalVideoPlayer) return;
+    modalVideoPlayer.pause();
+    modalVideoPlayer.removeAttribute("src");
+    modalVideoPlayer.load();
+    videoModal.classList.add("hidden");
+}
+
+if (modalCloseBtn) {
+    modalCloseBtn.addEventListener("click", closeVideoModal);
+}
+
+if (videoModal) {
+    videoModal.addEventListener("click", (e) => {
+        if (e.target === videoModal) {
+            closeVideoModal();
+        }
+    });
+}
+
 // Load Recent Downloads Library
 async function loadDownloadsLibrary() {
     if (!downloadsLibrary) return;
@@ -712,14 +836,25 @@ async function loadDownloadsLibrary() {
         data.downloads.forEach((file) => {
             const item = document.createElement("div");
             item.className = "flex items-center justify-between p-2.5 rounded-lg bg-surface-200 border border-border-subtle hover:border-neutral-700 transition text-xs";
+            const extLower = (file.ext || "").toLowerCase();
+            const isPlayable = [".mp4", ".mkv", ".webm", ".mp3", ".gif"].includes(extLower);
+
             item.innerHTML = `
-                <div class="flex items-center gap-2.5 min-w-0 pr-2">
+                <div class="flex items-center gap-2.5 min-w-0 pr-2 cursor-pointer flex-1 preview-trigger" data-filename="${file.filename}">
                     <span class="px-1.5 py-0.5 rounded bg-surface-50 text-[10px] font-mono text-neutral-400 border border-border-subtle">${file.ext}</span>
-                    <span class="font-normal text-neutral-200 truncate" title="${file.filename}">${file.filename}</span>
+                    <span class="font-normal text-neutral-200 truncate hover:text-white" title="${file.filename}">${file.filename}</span>
                 </div>
-                <div class="flex items-center gap-3 flex-shrink-0">
-                    <span class="text-neutral-500 font-mono text-[11px]">${file.size_str}</span>
-                    <button class="delete-file-btn text-neutral-500 hover:text-red-400 p-1 transition" data-filename="${file.filename}" title="Delete file">
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    <span class="text-neutral-500 font-mono text-[11px] mr-1">${file.size_str}</span>
+                    ${isPlayable ? `
+                        <button class="play-modal-btn text-neutral-400 hover:text-white p-1 rounded hover:bg-surface-50 transition" data-filename="${file.filename}" title="Play preview in app">
+                            <i data-lucide="play" class="w-3.5 h-3.5"></i>
+                        </button>
+                    ` : ""}
+                    <a href="/api/stream/${encodeURIComponent(file.filename)}" download="${file.filename}" class="text-neutral-400 hover:text-white p-1 rounded hover:bg-surface-50 transition" title="Save file">
+                        <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                    </a>
+                    <button class="delete-file-btn text-neutral-500 hover:text-red-400 p-1 rounded hover:bg-surface-50 transition" data-filename="${file.filename}" title="Delete file">
                         <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                     </button>
                 </div>
@@ -727,9 +862,18 @@ async function loadDownloadsLibrary() {
             downloadsLibrary.appendChild(item);
         });
 
+        // Attach play/preview listeners
+        document.querySelectorAll(".preview-trigger, .play-modal-btn").forEach((el) => {
+            el.addEventListener("click", () => {
+                const fname = el.dataset.filename;
+                if (fname) openVideoModal(fname);
+            });
+        });
+
         // Attach delete listeners
         document.querySelectorAll(".delete-file-btn").forEach((btn) => {
-            btn.addEventListener("click", async () => {
+            btn.addEventListener("click", async (e) => {
+                e.stopPropagation();
                 const fname = btn.dataset.filename;
                 if (confirm(`Delete "${fname}"?`)) {
                     await fetch(`/api/delete-file/${encodeURIComponent(fname)}`, { method: "DELETE" });
@@ -748,6 +892,47 @@ if (refreshLibraryBtn) {
     refreshLibraryBtn.addEventListener("click", loadDownloadsLibrary);
 }
 
+// Global Keyboard Shortcuts
+window.addEventListener("keydown", (e) => {
+    const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : "";
+    const isInputActive = (activeTag === "input" || activeTag === "textarea");
+
+    if (e.key === "Escape") {
+        if (videoModal && !videoModal.classList.contains("hidden")) {
+            closeVideoModal();
+            return;
+        }
+    }
+
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+        if (startDownloadBtn && !startDownloadBtn.disabled && currentVideoData) {
+            e.preventDefault();
+            startDownloadBtn.click();
+            return;
+        }
+    }
+
+    if (isInputActive) return;
+
+    if (e.key === "[") {
+        e.preventDefault();
+        if (setStartFromPlayerBtn) setStartFromPlayerBtn.click();
+    } else if (e.key === "]") {
+        e.preventDefault();
+        if (setEndFromPlayerBtn) setEndFromPlayerBtn.click();
+    } else if (e.code === "Space") {
+        if (ytPlayer && ytPlayer.getPlayerState) {
+            e.preventDefault();
+            const state = ytPlayer.getPlayerState();
+            if (state === 1) { // playing
+                ytPlayer.pauseVideo();
+            } else {
+                ytPlayer.playVideo();
+            }
+        }
+    }
+});
+
 // Restore Saved Session from localStorage (Persistent across Refresh)
 async function restoreSavedSession() {
     const savedUrl = localStorage.getItem("yt_cached_url");
@@ -764,6 +949,16 @@ async function restoreSavedSession() {
     const savedCustomName = localStorage.getItem("yt_custom_filename");
     if (savedCustomName && customFilenameInput) {
         customFilenameInput.value = savedCustomName;
+    }
+
+    if (losslessCutCheckbox) {
+        losslessCutCheckbox.checked = (localStorage.getItem("yt_lossless_cut") === "true");
+    }
+    if (audioFadeCheckbox) {
+        audioFadeCheckbox.checked = (localStorage.getItem("yt_audio_fade") === "true");
+    }
+    if (embedSubCheckbox) {
+        embedSubCheckbox.checked = (localStorage.getItem("yt_embed_sub") === "true");
     }
 
     const savedVideoJson = localStorage.getItem("yt_cached_video");

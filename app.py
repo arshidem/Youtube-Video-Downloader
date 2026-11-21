@@ -57,6 +57,10 @@ class DownloadRequest(BaseModel):
     start_time: Optional[float] = None
     end_time: Optional[float] = None
     custom_filename: Optional[str] = None
+    lossless: Optional[bool] = False
+    audio_fade: Optional[bool] = False
+    subtitle_lang: Optional[str] = None
+    embed_sub: Optional[bool] = False
 
 def format_seconds(seconds: Optional[float]) -> str:
     if seconds is None:
@@ -194,6 +198,33 @@ async def parse_video(req: ParseRequest):
     duration = info.get("duration", 0)
     video_id = info.get("id", "")
 
+    # Extract Chapters
+    chapters = []
+    raw_chapters = info.get("chapters") or []
+    for ch in raw_chapters:
+        s_ch = ch.get("start_time", 0)
+        e_ch = ch.get("end_time", duration)
+        chapters.append({
+            "title": ch.get("title", f"Chapter {len(chapters) + 1}"),
+            "start_time": s_ch,
+            "end_time": e_ch,
+            "start_formatted": format_seconds(s_ch),
+            "end_formatted": format_seconds(e_ch),
+            "duration_formatted": format_seconds(e_ch - s_ch)
+        })
+
+    # Extract Subtitles
+    subtitles = []
+    manual_subs = info.get("subtitles") or {}
+    auto_subs = info.get("automatic_captions") or {}
+    seen_langs = set()
+    for code in manual_subs.keys():
+        seen_langs.add(code)
+        subtitles.append({"code": code, "label": f"{code.upper()} (official)"})
+    for code in auto_subs.keys():
+        if code not in seen_langs and code in ["en", "es", "fr", "de", "pt", "it", "hi", "ja", "ko", "ru", "zh"]:
+            subtitles.append({"code": code, "label": f"{code.upper()} (auto)"})
+
     return {
         "success": True,
         "id": video_id,
@@ -206,6 +237,8 @@ async def parse_video(req: ParseRequest):
         "description": (info.get("description") or "")[:200] + ("..." if len(info.get("description") or "") > 200 else ""),
         "view_count": info.get("view_count", 0),
         "resolutions": res_details,
+        "chapters": chapters,
+        "subtitles": subtitles,
         "webpage_url": info.get("webpage_url", url)
     }
 
@@ -217,6 +250,10 @@ def run_download_job(download_id: str, req_data: dict):
     start_time = req_data.get("start_time")
     end_time = req_data.get("end_time")
     custom_name = req_data.get("custom_filename")
+    lossless = req_data.get("lossless", False)
+    audio_fade = req_data.get("audio_fade", False)
+    subtitle_lang = req_data.get("subtitle_lang")
+    embed_sub = req_data.get("embed_sub", False)
 
     def progress_hook(d):
         if task.get("cancelled"):
@@ -251,8 +288,31 @@ def run_download_job(download_id: str, req_data: dict):
         s = float(start_time) if start_time else 0.0
         e = float(end_time) if end_time else float("inf")
         opts["download_ranges"] = yt_dlp.utils.download_range_func(None, [(s, e)])
-        opts["force_keyframes_at_cuts"] = True
+        opts["force_keyframes_at_cuts"] = not lossless
         slice_label = f"_{format_seconds(s).replace(':', 'm')}s_to_{format_seconds(e).replace(':', 'm')}s"
+
+    # Subtitles settings
+    if subtitle_lang:
+        opts["writesubtitles"] = True
+        opts["writeautomaticsub"] = True
+        opts["subtitleslangs"] = [subtitle_lang]
+        opts["subtitlesformat"] = "srt/vtt/best"
+        if embed_sub and fmt in ["mp4", "mkv"]:
+            opts.setdefault("postprocessors", []).append({"key": "FFmpegEmbedSubtitle"})
+
+    # Lossless / fast cut settings
+    if lossless and is_sliced and fmt in ["mp4", "mkv"]:
+        opts.setdefault("postprocessor_args", {}).setdefault("ffmpeg", []).extend(["-c", "copy"])
+
+    # Audio fade settings
+    if audio_fade and is_sliced and fmt != "gif" and not lossless:
+        s_val = float(start_time or 0.0)
+        e_val = float(end_time or 0.0)
+        dur = e_val - s_val
+        if dur >= 2.0:
+            fade_out_st = max(0.0, dur - 1.0)
+            afade_filter = f"afade=t=in:ss=0:d=1,afade=t=out:st={fade_out_st:.2f}:d=1"
+            opts.setdefault("postprocessor_args", {}).setdefault("ffmpeg", []).extend(["-af", afade_filter])
 
     # Format & Resolution settings
     if fmt == "mp3" or resolution == "audio_only":
@@ -276,6 +336,9 @@ def run_download_job(download_id: str, req_data: dict):
         if fmt in ["mp4", "mkv", "webm"]:
             opts["merge_output_format"] = fmt
             final_ext = fmt
+        elif fmt == "gif":
+            opts["merge_output_format"] = "mp4"
+            final_ext = "gif"
         else:
             opts["merge_output_format"] = "mp4"
             final_ext = "mp4"
@@ -294,10 +357,31 @@ def run_download_job(download_id: str, req_data: dict):
             task["title"] = info.get("title", "Video")
 
         # Locate the downloaded file
-        # Search for files with our safe_download_id
         matched_files = list(DOWNLOADS_DIR.glob(f"*{safe_download_id}*"))
         if matched_files:
             downloaded_file = matched_files[0]
+            
+            # If GIF format was requested, convert MP4 to palettegen GIF
+            if fmt == "gif" and downloaded_file.suffix.lower() != ".gif":
+                task["status_msg"] = "Generating optimized GIF with FFmpeg..."
+                gif_path = downloaded_file.with_suffix(".gif")
+                ffmpeg_bin = os.path.join(ffmpeg_dir, "ffmpeg.exe") if "ffmpeg_dir" in globals() else "ffmpeg"
+                try:
+                    import subprocess
+                    cmd = [
+                        ffmpeg_bin, "-y", "-i", str(downloaded_file),
+                        "-vf", "fps=15,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse",
+                        str(gif_path)
+                    ]
+                    subprocess.run(cmd, check=True, capture_output=True)
+                    try:
+                        downloaded_file.unlink(missing_ok=True)
+                    except Exception:
+                        pass
+                    downloaded_file = gif_path
+                except Exception as gif_err:
+                    print(f"GIF conversion warning: {gif_err}")
+
             task["status"] = "completed"
             task["progress"] = 100.0
             task["filename"] = downloaded_file.name
@@ -405,6 +489,30 @@ async def list_downloads():
             })
     files.sort(key=lambda x: x["modified"], reverse=True)
     return {"downloads": files}
+
+@app.get("/api/stream/{filename}")
+async def stream_file(filename: str):
+    file_path = DOWNLOADS_DIR / filename
+    try:
+        file_path.resolve().relative_to(DOWNLOADS_DIR.resolve())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid file path.")
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found.")
+
+    ext = file_path.suffix.lower()
+    media_type = "video/mp4"
+    if ext == ".webm":
+        media_type = "video/webm"
+    elif ext == ".mkv":
+        media_type = "video/x-matroska"
+    elif ext == ".mp3":
+        media_type = "audio/mpeg"
+    elif ext == ".gif":
+        media_type = "image/gif"
+
+    return FileResponse(file_path, media_type=media_type)
 
 @app.post("/api/open-folder")
 async def open_downloads_folder():

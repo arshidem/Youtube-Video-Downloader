@@ -141,6 +141,10 @@
                                         <input type="radio" name="videoFormat" value="mp3" class="hidden peer">
                                         <div class="py-1 text-xs rounded-md peer-checked:bg-surface-50 peer-checked:text-white text-neutral-400 transition font-medium">MP3</div>
                                     </label>
+                                    <label class="flex-1 text-center cursor-pointer">
+                                        <input type="radio" name="videoFormat" value="gif" class="hidden peer">
+                                        <div class="py-1 text-xs rounded-md peer-checked:bg-surface-50 peer-checked:text-white text-neutral-400 transition font-medium">GIF</div>
+                                    </label>
                                 </div>
                             </div>
                             <div>
@@ -154,8 +158,53 @@
                             </div>
                         </div>
 
+                        <!-- Advanced Slicing & Audio / Subtitle Options -->
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-3 border-t border-border-subtle">
+                            <label class="flex items-center gap-2 cursor-pointer bg-surface-200 border border-border-subtle rounded-lg px-2.5 py-2 hover:border-neutral-600 transition select-none">
+                                <input type="checkbox" id="losslessCutCheckbox" class="rounded border-border-subtle bg-surface-100 text-neutral-200 focus:ring-0">
+                                <div>
+                                    <div class="text-[11px] font-medium text-neutral-200">Lossless Instant Cut</div>
+                                    <div class="text-[10px] text-neutral-500">-c copy (no re-encode)</div>
+                                </div>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer bg-surface-200 border border-border-subtle rounded-lg px-2.5 py-2 hover:border-neutral-600 transition select-none">
+                                <input type="checkbox" id="audioFadeCheckbox" class="rounded border-border-subtle bg-surface-100 text-neutral-200 focus:ring-0">
+                                <div>
+                                    <div class="text-[11px] font-medium text-neutral-200">Audio Fade In/Out</div>
+                                    <div class="text-[10px] text-neutral-500">1s smooth transition</div>
+                                </div>
+                            </label>
+                            <div class="bg-surface-200 border border-border-subtle rounded-lg px-2.5 py-1.5 space-y-1">
+                                <div class="flex items-center justify-between">
+                                    <label class="text-[11px] font-medium text-neutral-400">Subtitles</label>
+                                    <label class="flex items-center gap-1 text-[10px] text-neutral-400 cursor-pointer select-none">
+                                        <input type="checkbox" id="embedSubCheckbox" class="rounded text-[10px]">
+                                        <span>Embed</span>
+                                    </label>
+                                </div>
+                                <select id="subtitleSelect" class="w-full bg-surface-100 border border-border-subtle rounded text-[11px] text-neutral-200 py-1 px-1.5 outline-none">
+                                    <option value="">None</option>
+                                </select>
+                            </div>
+                        </div>
+
                     </div>
 
+                </div>
+            </div>
+
+            <!-- Auto Chapters (shown when video has chapters) -->
+            <div id="chaptersContainer" class="hidden bg-surface-100 border border-border-subtle rounded-xl p-4 space-y-2.5">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="bookmark" class="w-3.5 h-3.5 text-neutral-400"></i>
+                        <span class="text-xs font-medium text-neutral-300">Chapters</span>
+                        <span id="chaptersCountBadge" class="text-[10px] font-mono px-1.5 py-0.2 rounded bg-surface-200 border border-border-subtle text-neutral-400">0</span>
+                    </div>
+                    <span class="text-[11px] text-neutral-500">Click a chapter to set trimmer range</span>
+                </div>
+                <div id="chaptersList" class="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
+                    <!-- Populated dynamically -->
                 </div>
             </div>
 
@@ -268,6 +317,17 @@
                         -30s
                     </button>
                 </div>
+
+                <!-- Keyboard Shortcuts Helper -->
+                <div class="flex flex-wrap items-center justify-between pt-2 border-t border-border-subtle text-[11px] text-neutral-500 font-mono">
+                    <span class="text-neutral-400">Shortcuts:</span>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <span><kbd class="px-1.5 py-0.5 rounded bg-surface-200 border border-border-subtle text-neutral-300 font-semibold">[</kbd> Set Start</span>
+                        <span><kbd class="px-1.5 py-0.5 rounded bg-surface-200 border border-border-subtle text-neutral-300 font-semibold">]</kbd> Set End</span>
+                        <span><kbd class="px-1.5 py-0.5 rounded bg-surface-200 border border-border-subtle text-neutral-300 font-semibold">Space</kbd> Play/Pause</span>
+                        <span><kbd class="px-1.5 py-0.5 rounded bg-surface-200 border border-border-subtle text-neutral-300 font-semibold">Ctrl+Enter</kbd> Download</span>
+                    </div>
+                </div>
             </div>
 
             <!-- Download Button -->
@@ -354,9 +414,27 @@
         yt-trim • yt-dlp & ffmpeg
     </footer>
 
+    <!-- In-App Video Player Modal -->
+    <div id="videoModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+        <div class="bg-surface-100 border border-border-subtle rounded-xl max-w-3xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
+                <div class="flex items-center gap-2 min-w-0 pr-3">
+                    <i data-lucide="play-circle" class="w-4 h-4 text-neutral-300 flex-shrink-0"></i>
+                    <span id="modalVideoTitle" class="text-xs font-medium text-white truncate">Preview</span>
+                </div>
+                <button id="modalCloseBtn" class="text-neutral-400 hover:text-white p-1 rounded-md hover:bg-surface-50 transition" title="Close">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <div class="p-3 bg-black flex items-center justify-center">
+                <video id="modalVideoPlayer" controls autoplay class="w-full max-h-[65vh] rounded outline-none bg-black"></video>
+            </div>
+        </div>
+    </div>
+
     <!-- YouTube IFrame API -->
     <script src="https://www.youtube.com/iframe_api"></script>
-    <script src="/static/js/app.js?v=1.3"></script>
+    <script src="/static/js/app.js?v=1.4"></script>
     <script>
         lucide.createIcons();
     </script>
