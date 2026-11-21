@@ -458,9 +458,18 @@ function updateTimelineView() {
     localStorage.setItem("yt_range_end", end);
 }
 
-// Slider Event Listeners
+// Slider Event Listeners with Touch & Stacking optimization
+function bringToFront(activeEl, backgroundEl) {
+    if (activeEl) activeEl.style.zIndex = "30";
+    if (backgroundEl) backgroundEl.style.zIndex = "20";
+}
+
 if (rangeStart) {
+    const onStartActive = () => bringToFront(rangeStart, rangeEnd);
+    rangeStart.addEventListener("pointerdown", onStartActive);
+    rangeStart.addEventListener("touchstart", onStartActive, { passive: true });
     rangeStart.addEventListener("input", () => {
+        onStartActive();
         let s = parseFloat(rangeStart.value);
         let e = rangeEnd ? parseFloat(rangeEnd.value) : s;
         if (s > e) {
@@ -473,7 +482,11 @@ if (rangeStart) {
 }
 
 if (rangeEnd) {
+    const onEndActive = () => bringToFront(rangeEnd, rangeStart);
+    rangeEnd.addEventListener("pointerdown", onEndActive);
+    rangeEnd.addEventListener("touchstart", onEndActive, { passive: true });
     rangeEnd.addEventListener("input", () => {
+        onEndActive();
         let s = rangeStart ? parseFloat(rangeStart.value) : 0;
         let e = parseFloat(rangeEnd.value);
         if (e < s) {

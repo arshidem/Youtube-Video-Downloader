@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    container_name: yt-trim-app
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./downloads:/app/downloads
+      # If you have a cookies.txt file to bypass cloud IP blocks, uncomment the line below:
+      # - ./cookies.txt:/app/cookies.txt:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+      # Optional: specify a proxy if your cloud provider is IP-blocked by YouTube
+      # - YTDLP_PROXY=http://user:pass@proxy.example.com:8080
+    restart: unless-stopped

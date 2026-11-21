@@ -82,6 +82,21 @@ def format_size(bytes_num: Optional[int]) -> str:
         bytes_num /= 1024.0
     return f"{bytes_num:.1f} TB"
 
+def cleanup_old_downloads(max_age_hours: int = 4):
+    """Clean up downloaded files older than max_age_hours to save disk space on public servers."""
+    try:
+        now = time.time()
+        cutoff = now - (max_age_hours * 3600)
+        for p in DOWNLOADS_DIR.iterdir():
+            if p.is_file():
+                try:
+                    if p.stat().st_mtime < cutoff:
+                        p.unlink(missing_ok=True)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
 def get_base_ydl_opts() -> dict:
     opts = {
         "quiet": True,
@@ -100,9 +115,19 @@ def get_base_ydl_opts() -> dict:
     if 'ffmpeg_dir' in globals() and os.path.exists(ffmpeg_dir):
         opts["ffmpeg_location"] = ffmpeg_dir
 
+    # Proxy support for cloud/datacenter IP bypassing
+    proxy = os.getenv("YTDLP_PROXY") or os.getenv("HTTPS_PROXY") or os.getenv("HTTP_PROXY")
+    if proxy:
+        opts["proxy"] = proxy.strip()
+
     # Optional YouTube authentication. Prefer a local cookie export when supplied;
     # otherwise yt-dlp can read cookies from a locally installed browser.
     cookie_file = os.getenv("YTDLP_COOKIES", "").strip()
+    if not cookie_file:
+        local_cookie = BASE_DIR / "cookies.txt"
+        if local_cookie.is_file():
+            cookie_file = str(local_cookie.resolve())
+
     browser = os.getenv("YTDLP_COOKIES_FROM_BROWSER", "").strip().lower()
     if cookie_file:
         cookie_path = Path(cookie_file).expanduser()
@@ -476,6 +501,7 @@ async def get_download_file(download_id: str):
 
 @app.get("/api/downloads")
 async def list_downloads():
+    cleanup_old_downloads(max_age_hours=6)
     files = []
     for f in DOWNLOADS_DIR.iterdir():
         if f.is_file() and not f.name.endswith(".part"):
@@ -521,7 +547,7 @@ async def open_downloads_folder():
             os.startfile(str(DOWNLOADS_DIR))
             return {"success": True, "message": "Folder opened in Windows Explorer"}
         else:
-            return {"success": False, "message": "Not running on Windows"}
+            return {"success": False, "message": "Server running on Linux/Cloud. Files are saved directly to your device via the download button."}
     except Exception as e:
         return {"success": False, "message": str(e)}
 

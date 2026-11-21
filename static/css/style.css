@@ -20,9 +20,10 @@ body {
 /* Custom Dual-Range Timeline Slider (Clean & Hairline) */
 .timeline-track-container {
     position: relative;
-    height: 32px;
+    height: 36px;
     display: flex;
     align-items: center;
+    touch-action: pan-y;
 }
 
 .timeline-range-input {
@@ -37,18 +38,19 @@ body {
     background: transparent;
     outline: none;
     margin: 0;
+    touch-action: pan-y;
 }
 
 .timeline-range-input::-webkit-slider-thumb {
     pointer-events: auto;
     -webkit-appearance: none;
     appearance: none;
-    width: 14px;
-    height: 24px;
+    width: 16px;
+    height: 26px;
     border-radius: 4px;
     background: #ffffff;
     border: 1px solid #d1d5db;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
     cursor: ew-resize;
     transition: background 0.15s ease, transform 0.15s ease;
 }
@@ -60,18 +62,49 @@ body {
 
 .timeline-range-input::-webkit-slider-thumb:active {
     background: #e5e7eb;
-    transform: scale(1.12);
+    transform: scale(1.15);
 }
 
 .timeline-range-input::-moz-range-thumb {
     pointer-events: auto;
-    width: 14px;
-    height: 24px;
+    width: 16px;
+    height: 26px;
     border-radius: 4px;
     background: #ffffff;
     border: 1px solid #d1d5db;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
     cursor: ew-resize;
+}
+
+/* Mobile & Touch-Friendly Optimizations */
+@media (max-width: 640px), (pointer: coarse) {
+    .timeline-track-container {
+        height: 44px;
+    }
+
+    .timeline-range-input::-webkit-slider-thumb {
+        width: 24px;
+        height: 36px;
+        border-radius: 6px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+    }
+
+    .timeline-range-input::-moz-range-thumb {
+        width: 24px;
+        height: 36px;
+        border-radius: 6px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+    }
+
+    /* Prevent accidental zoom on double tap on controls */
+    button, input, select {
+        touch-action: manipulation;
+    }
+}
+
+/* Smooth momentum scrolling for chips on mobile */
+#chaptersList, #resolutionList {
+    -webkit-overflow-scrolling: touch;
 }
 
 /* Subtle scrollbars */

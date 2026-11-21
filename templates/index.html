@@ -44,7 +44,7 @@
             
             <button id="openFolderBtn" class="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-white px-2.5 py-1.5 rounded-md hover:bg-surface-50 border border-border-subtle transition">
                 <i data-lucide="folder" class="w-3.5 h-3.5"></i>
-                <span>Downloads</span>
+                <span class="hidden sm:inline">Downloads</span>
             </button>
         </div>
     </header>
@@ -251,7 +251,7 @@
                 </div>
 
                 <!-- Timestamp Inputs -->
-                <div class="grid grid-cols-2 gap-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <div class="bg-surface-200 border border-border-subtle rounded-lg p-2.5 space-y-2">
                         <div class="flex items-center justify-between text-[11px]">
                             <span class="text-neutral-400 font-medium">Start</span>
@@ -318,8 +318,8 @@
                     </button>
                 </div>
 
-                <!-- Keyboard Shortcuts Helper -->
-                <div class="flex flex-wrap items-center justify-between pt-2 border-t border-border-subtle text-[11px] text-neutral-500 font-mono">
+                <!-- Keyboard Shortcuts Helper (Visible on desktops) -->
+                <div class="hidden sm:flex flex-wrap items-center justify-between pt-2 border-t border-border-subtle text-[11px] text-neutral-500 font-mono">
                     <span class="text-neutral-400">Shortcuts:</span>
                     <div class="flex flex-wrap items-center gap-3">
                         <span><kbd class="px-1.5 py-0.5 rounded bg-surface-200 border border-border-subtle text-neutral-300 font-semibold">[</kbd> Set Start</span>
