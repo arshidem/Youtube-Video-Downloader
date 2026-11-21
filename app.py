@@ -95,6 +95,30 @@ def get_base_ydl_opts() -> dict:
     }
     if 'ffmpeg_dir' in globals() and os.path.exists(ffmpeg_dir):
         opts["ffmpeg_location"] = ffmpeg_dir
+
+    # Optional YouTube authentication. Prefer a local cookie export when supplied;
+    # otherwise yt-dlp can read cookies from a locally installed browser.
+    cookie_file = os.getenv("YTDLP_COOKIES", "").strip()
+    browser = os.getenv("YTDLP_COOKIES_FROM_BROWSER", "").strip().lower()
+    if cookie_file:
+        cookie_path = Path(cookie_file).expanduser()
+        if cookie_path.is_file():
+            opts["cookiefile"] = str(cookie_path.resolve())
+        else:
+            print(f"Warning: YTDLP_COOKIES file not found: {cookie_path}")
+    elif browser:
+        supported_browsers = {
+            "brave", "chrome", "chromium", "edge", "firefox",
+            "opera", "safari", "vivaldi", "whale"
+        }
+        if browser in supported_browsers:
+            opts["cookiesfrombrowser"] = (browser, None, None, None)
+        else:
+            print(
+                "Warning: Unsupported YTDLP_COOKIES_FROM_BROWSER value. "
+                "Use chrome, edge, firefox, brave, chromium, opera, safari, "
+                "vivaldi, or whale."
+            )
     return opts
 
 @app.get("/favicon.ico", include_in_schema=False)
@@ -124,6 +148,18 @@ async def parse_video(req: ParseRequest):
         error_msg = str(e)
         if "is not a valid URL" in error_msg:
             raise HTTPException(status_code=400, detail="Invalid YouTube URL. Please check the link.")
+        if "Sign in to confirm" in error_msg or "not a bot" in error_msg.lower():
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "YouTube requires account verification for this request. "
+                    "On the computer running this app, sign in to YouTube in Chrome/Edge/Firefox, "
+                    "close the browser, then set YTDLP_COOKIES_FROM_BROWSER=chrome "
+                    "(or edge/firefox) and restart the app. Alternatively, export a Netscape "
+                    "cookies.txt file and set YTDLP_COOKIES to its full path. "
+                    "Keep cookies private and never commit the file."
+                )
+            )
         raise HTTPException(status_code=400, detail=f"Failed to fetch video details: {error_msg}")
 
     # Extract available video resolutions
