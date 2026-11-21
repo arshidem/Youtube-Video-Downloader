@@ -31,10 +31,28 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 BASE_DIR = Path(__file__).resolve().parent
-DOWNLOADS_DIR = BASE_DIR / "downloads"
-DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
 STATIC_DIR = BASE_DIR / "static"
 TEMPLATES_DIR = BASE_DIR / "templates"
+
+# Determine writable directory: use app dir if writable, otherwise /tmp
+def _get_writable_dir() -> Path:
+    # Try app directory first
+    test_file = BASE_DIR / ".write_test"
+    try:
+        test_file.write_text("ok")
+        test_file.unlink()
+        return BASE_DIR
+    except (OSError, PermissionError):
+        pass
+    # Fall back to /tmp (always writable on cloud platforms)
+    tmp = Path("/tmp/yt-trim")
+    tmp.mkdir(parents=True, exist_ok=True)
+    return tmp
+
+WRITABLE_DIR = _get_writable_dir()
+DOWNLOADS_DIR = WRITABLE_DIR / "downloads" if WRITABLE_DIR != BASE_DIR else BASE_DIR / "downloads"
+DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
+COOKIES_PATH = WRITABLE_DIR / "cookies.txt"
 
 app = FastAPI(title="YouTube Video & Clip Downloader")
 
@@ -129,7 +147,7 @@ def get_base_ydl_opts() -> dict:
     
     # If raw cookie text is provided in environment variables (ideal for cloud dashboards like Render/Railway)
     if cookie_text:
-        env_cookie_path = BASE_DIR / ".env_cookies.txt"
+        env_cookie_path = WRITABLE_DIR / ".env_cookies.txt"
         try:
             env_cookie_path.write_text(cookie_text, encoding="utf-8")
             cookie_file = str(env_cookie_path.resolve())
@@ -137,9 +155,11 @@ def get_base_ydl_opts() -> dict:
             print(f"Warning saving YTDLP_COOKIES_TEXT: {e}")
 
     if not cookie_file:
-        local_cookie = BASE_DIR / "cookies.txt"
-        if local_cookie.is_file():
-            cookie_file = str(local_cookie.resolve())
+        # Check writable dir first (where in-app save writes), then app dir
+        for candidate in [COOKIES_PATH, BASE_DIR / "cookies.txt"]:
+            if candidate.is_file():
+                cookie_file = str(candidate.resolve())
+                break
 
     browser = os.getenv("YTDLP_COOKIES_FROM_BROWSER", "").strip().lower()
     if cookie_file:
@@ -173,8 +193,7 @@ async def index(request: Request):
 
 @app.get("/api/cookies-status")
 async def get_cookies_status():
-    cookie_file = BASE_DIR / "cookies.txt"
-    has_cookies = cookie_file.exists() or bool(os.getenv("YTDLP_COOKIES")) or bool(os.getenv("YTDLP_COOKIES_TEXT"))
+    has_cookies = COOKIES_PATH.exists() or bool(os.getenv("YTDLP_COOKIES")) or bool(os.getenv("YTDLP_COOKIES_TEXT"))
     return {"has_cookies": has_cookies}
 
 @app.post("/api/save-cookies")
@@ -183,19 +202,17 @@ async def save_cookies(req: SaveCookiesRequest):
     if not text:
         raise HTTPException(status_code=400, detail="Cookie content cannot be empty.")
     
-    cookie_file = BASE_DIR / "cookies.txt"
     try:
-        cookie_file.write_text(text, encoding="utf-8")
+        COOKIES_PATH.write_text(text, encoding="utf-8")
         return {"success": True, "message": "Cookies saved successfully! YouTube authenticated."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save cookies: {str(e)}")
 
 @app.delete("/api/delete-cookies")
 async def delete_cookies():
-    cookie_file = BASE_DIR / "cookies.txt"
-    if cookie_file.exists():
+    if COOKIES_PATH.exists():
         try:
-            cookie_file.unlink()
+            COOKIES_PATH.unlink()
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
     return {"success": True, "message": "Saved cookies removed."}
