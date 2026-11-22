@@ -539,10 +539,10 @@ def get_ydl_player_variants(base_opts: dict) -> List[dict]:
 
     variants = []
     player_clients = [
+        ["tv", "web_embedded", "web"],
         ["web", "android", "ios"],
         ["ios", "android", "web"],
         ["mweb", "android", "web_safari"],
-        ["tv", "web_embedded", "web"],
     ]
 
     po_token = os.getenv("YTDLP_PO_TOKEN", "").strip()
