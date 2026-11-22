@@ -122,7 +122,15 @@ def get_base_ydl_opts() -> dict:
     opts = {
         "quiet": True,
         "no_warnings": True,
-        "check_formats": None,
+        "check_formats": False,
+        "ignore_no_formats_error": True,
+        "skip_unavailable_formats": True,
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["ios", "android", "web"],
+                "player_skip": ["configs"]
+            }
+        },
         "js_runtimes": {
             "node": {},
             "deno": {},
@@ -266,20 +274,23 @@ async def parse_video(req: ParseRequest):
 
     for f in formats:
         h = f.get("height")
-        vcodec = f.get("vcodec", "none")
-        acodec = f.get("acodec", "none")
-        if acodec != "none":
+        vcodec = f.get("vcodec")
+        acodec = f.get("acodec")
+        if acodec and acodec != "none":
             has_audio = True
-        if h and isinstance(h, int) and h >= 144 and vcodec != "none" and h not in seen_heights:
-            seen_heights.add(h)
-            fps = f.get("fps") or 30
-            fps_str = f" {fps}fps" if fps and fps > 30 else ""
-            res_details.append({
-                "height": h,
-                "label": f"{h}p{fps_str}",
-                "fps": fps,
-                "ext": f.get("ext", "mp4")
-            })
+        # Include combined formats and video-only formats. A format is usable
+        # if it has a video codec or if it is a combined MP4/WebM stream.
+        if h and isinstance(h, int) and h >= 144 and h not in seen_heights:
+            if vcodec not in (None, "none") or f.get("resolution") not in (None, "audio only"):
+                seen_heights.add(h)
+                fps = f.get("fps") or 30
+                fps_str = f" {fps}fps" if fps and fps > 30 else ""
+                res_details.append({
+                    "height": h,
+                    "label": f"{h}p{fps_str}",
+                    "fps": fps,
+                    "ext": f.get("ext", "mp4")
+                })
 
     # Sort descending by height
     res_details.sort(key=lambda x: x["height"], reverse=True)
@@ -417,16 +428,16 @@ def run_download_job(download_id: str, req_data: dict):
             try:
                 h = int(resolution)
                 opts["format"] = (
-                    f"bestvideo[height<={h}][ext=mp4]+bestaudio[ext=m4a]/"
-                    f"bestvideo[height<={h}]+bestaudio/"
-                    f"bestvideo*[height<={h}]+bestaudio*/"
-                    f"best[height<={h}]/"
-                    f"bestvideo*+bestaudio/best"
+                    f"bv*[height<={h}][ext=mp4]+ba[ext=m4a]/"
+                    f"bv*[height<={h}]+ba/"
+                    f"b[height<={h}][ext=mp4]/"
+                    f"b[height<={h}]/"
+                    f"bv*+ba/b"
                 )
             except ValueError:
-                opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/bestvideo*+bestaudio/best"
+                opts["format"] = "bv*+ba/b/best"
         else:
-            opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/bestvideo*+bestaudio/best"
+            opts["format"] = "bv*+ba/b/best"
         
         if fmt in ["mp4", "mkv", "webm"]:
             opts["merge_output_format"] = fmt
@@ -460,7 +471,7 @@ def run_download_job(download_id: str, req_data: dict):
             if fmt == "gif" and downloaded_file.suffix.lower() != ".gif":
                 task["status_msg"] = "Generating optimized GIF with FFmpeg..."
                 gif_path = downloaded_file.with_suffix(".gif")
-                ffmpeg_bin = os.path.join(ffmpeg_dir, "ffmpeg.exe") if "ffmpeg_dir" in globals() else "ffmpeg"
+                ffmpeg_bin = shutil.which("ffmpeg") or (os.path.join(ffmpeg_dir, "ffmpeg") if "ffmpeg_dir" in globals() else "ffmpeg")
                 try:
                     import subprocess
                     cmd = [

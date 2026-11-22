@@ -317,6 +317,11 @@ function renderVideoStudio(data) {
         resolutionList.innerHTML = "";
         
         let savedRes = localStorage.getItem("yt_selected_res") || "best";
+        const availableValues = new Set(["best", "audio_only", ...((data.resolutions || []).map(res => String(res.height)))]);
+        if (!availableValues.has(savedRes)) {
+            savedRes = "best";
+            localStorage.setItem("yt_selected_res", "best");
+        }
         selectedResolution = savedRes;
 
         // Auto (Best) Button
