@@ -396,7 +396,10 @@ def run_download_job(download_id: str, req_data: dict):
         opts["writesubtitles"] = True
         opts["writeautomaticsub"] = True
         opts["subtitleslangs"] = [subtitle_lang]
-        opts["subtitlesformat"] = "srt/vtt/best"
+        opts["subtitlesformat"] = "srt/best"
+        # yt-dlp may return this error for transient subtitle CDN failures.
+        # It must not cancel or mark the complete video download as failed.
+        opts["ignoreerrors"] = True
         if embed_sub and fmt in ["mp4", "mkv"]:
             opts.setdefault("postprocessors", []).append({"key": "FFmpegEmbedSubtitle"})
 
@@ -511,9 +514,43 @@ def run_download_job(download_id: str, req_data: dict):
             except Exception:
                 pass
     except Exception as e:
-        task["status"] = "error"
-        task["error_message"] = str(e)
-        print(f"Download Error: {e}")
+        error_text = str(e)
+        if subtitle_lang and ("subtitles" in error_text.lower() or "data blocks" in error_text.lower() or "unable to download" in error_text.lower()):
+            print(f"Subtitle download failed; retrying video without subtitles: {e}")
+            opts.pop("writesubtitles", None)
+            opts.pop("writeautomaticsub", None)
+            opts.pop("subtitleslangs", None)
+            opts.pop("subtitlesformat", None)
+
+            postprocessors = opts.get("postprocessors", [])
+            opts["postprocessors"] = [p for p in postprocessors if p.get("key") != "FFmpegEmbedSubtitle"]
+
+            try:
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    info = ydl.extract_info(url, download=True)
+                    task["title"] = info.get("title", "Video")
+
+                matched_files = list(DOWNLOADS_DIR.glob(f"*{safe_download_id}*"))
+                if matched_files:
+                    downloaded_file = matched_files[0]
+                    task["status"] = "completed"
+                    task["progress"] = 100.0
+                    task["filename"] = downloaded_file.name
+                    task["filepath"] = str(downloaded_file)
+                    task["filesize"] = downloaded_file.stat().st_size
+                    task["filesize_str"] = format_size(downloaded_file.stat().st_size)
+                    task["completed_at"] = time.time()
+                else:
+                    task["status"] = "error"
+                    task["error_message"] = "Video download completed but no output file was found."
+            except Exception as retry_error:
+                task["status"] = "error"
+                task["error_message"] = str(retry_error)
+                print(f"Download Error after subtitle fallback: {retry_error}")
+        else:
+            task["status"] = "error"
+            task["error_message"] = error_text
+            print(f"Download Error: {e}")
 
 @app.post("/api/download")
 async def start_download(req: DownloadRequest, background_tasks: BackgroundTasks):
