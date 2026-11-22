@@ -248,8 +248,16 @@ async def parse_video(req: ParseRequest):
 
     try:
         def fetch_info():
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                return ydl.extract_info(url, download=False)
+            last_error = None
+            for attempt_opts in get_ydl_player_variants(opts):
+                try:
+                    with yt_dlp.YoutubeDL(attempt_opts) as ydl:
+                        info = ydl.extract_info(url, download=False)
+                    if info and info.get("formats"):
+                        return info
+                except Exception as e:
+                    last_error = e
+            raise last_error or Exception("No video formats found")
 
         info = await asyncio.to_thread(fetch_info)
     except Exception as e:
@@ -461,48 +469,20 @@ def run_download_job(download_id: str, req_data: dict):
         opts["outtmpl"] = str(DOWNLOADS_DIR / f"%(title).80s{slice_label}_{safe_download_id}.%(ext)s")
 
     try:
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            task["title"] = info.get("title", "Video")
-
-        # Locate the downloaded file
-        matched_files = list(DOWNLOADS_DIR.glob(f"*{safe_download_id}*"))
-        if matched_files:
-            downloaded_file = matched_files[0]
-            
-            # If GIF format was requested, convert MP4 to palettegen GIF
-            if fmt == "gif" and downloaded_file.suffix.lower() != ".gif":
-                task["status_msg"] = "Generating optimized GIF with FFmpeg..."
-                gif_path = downloaded_file.with_suffix(".gif")
-                ffmpeg_bin = shutil.which("ffmpeg") or (os.path.join(ffmpeg_dir, "ffmpeg") if "ffmpeg_dir" in globals() else "ffmpeg")
-                try:
-                    import subprocess
-                    cmd = [
-                        ffmpeg_bin, "-y", "-i", str(downloaded_file),
-                        "-vf", "fps=15,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse",
-                        str(gif_path)
-                    ]
-                    subprocess.run(cmd, check=True, capture_output=True)
-                    try:
-                        downloaded_file.unlink(missing_ok=True)
-                    except Exception:
-                        pass
-                    downloaded_file = gif_path
-                except Exception as gif_err:
-                    print(f"GIF conversion warning: {gif_err}")
-
-            task["status"] = "completed"
-            task["progress"] = 100.0
-            task["filename"] = downloaded_file.name
-            task["filepath"] = str(downloaded_file)
-            task["filesize"] = downloaded_file.stat().st_size
-            task["filesize_str"] = format_size(downloaded_file.stat().st_size)
-            task["completed_at"] = time.time()
+        last_error = None
+        for attempt_opts in get_ydl_player_variants(opts):
+            try:
+                with yt_dlp.YoutubeDL(attempt_opts) as ydl:
+                    info = ydl.extract_info(url, download=True)
+                    task["title"] = info.get("title", "Video")
+                break
+            except Exception as e:
+                last_error = e
+                error_text = str(e).lower()
+                if "no video formats found" not in error_text and "requested format is not available" not in error_text:
+                    raise
         else:
-            task["status"] = "completed"
-            task["progress"] = 100.0
-            task["filename"] = f"video_{safe_download_id}.{final_ext}"
-            task["filesize_str"] = "Completed"
+            raise last_error or Exception("No video formats found")
     except yt_dlp.utils.DownloadCancelled:
         task["status"] = "cancelled"
         task["status_msg"] = "Download cancelled by user"
@@ -551,6 +531,29 @@ def run_download_job(download_id: str, req_data: dict):
             task["status"] = "error"
             task["error_message"] = error_text
             print(f"Download Error: {e}")
+
+def get_ydl_player_variants(base_opts: dict) -> List[dict]:
+    """Return several independent yt-dlp configurations for YouTube/CDN fallback."""
+    import copy
+
+    variants = []
+    player_clients = [
+        ["ios", "android", "web"],
+        ["web", "android", "ios"],
+        ["android_vr", "tv_embedded", "web"],
+        ["mweb", "tv", "web_safari"],
+    ]
+
+    for clients in player_clients:
+        opts = copy.deepcopy(base_opts)
+        opts["extractor_args"] = {
+            "youtube": {
+                "player_client": clients,
+            }
+        }
+        variants.append(opts)
+
+    return variants
 
 @app.post("/api/download")
 async def start_download(req: DownloadRequest, background_tasks: BackgroundTasks):
