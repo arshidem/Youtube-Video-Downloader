@@ -443,7 +443,8 @@ def run_download_job(download_id: str, req_data: dict):
                     f"bv*[height<={h}]+ba/"
                     f"b[height<={h}][ext=mp4]/"
                     f"b[height<={h}]/"
-                    f"bv*+ba/b"
+                    f"bv*+ba/b/"
+                    f"18/best"
                 )
             except ValueError:
                 opts["format"] = "bv*+ba/b/best"
@@ -533,24 +534,27 @@ def run_download_job(download_id: str, req_data: dict):
             print(f"Download Error: {e}")
 
 def get_ydl_player_variants(base_opts: dict) -> List[dict]:
-    """Return several independent yt-dlp configurations for YouTube/CDN fallback."""
+    """Return independent yt-dlp configurations for YouTube/CDN fallback."""
     import copy
 
     variants = []
     player_clients = [
-        ["ios", "android", "web"],
         ["web", "android", "ios"],
-        ["android_vr", "tv_embedded", "web"],
-        ["mweb", "tv", "web_safari"],
+        ["ios", "android", "web"],
+        ["mweb", "android", "web_safari"],
+        ["tv", "web_embedded", "web"],
     ]
 
+    po_token = os.getenv("YTDLP_PO_TOKEN", "").strip()
     for clients in player_clients:
         opts = copy.deepcopy(base_opts)
-        opts["extractor_args"] = {
-            "youtube": {
-                "player_client": clients,
-            }
-        }
+        youtube_args = {"player_client": clients}
+        if po_token:
+            youtube_args["po_token"] = po_token
+        opts["extractor_args"] = {"youtube": youtube_args}
+        opts["extractor_retries"] = 3
+        opts["fragment_retries"] = 3
+        opts["retry_sleep"] = {"extractor": 2}
         variants.append(opts)
 
     return variants
